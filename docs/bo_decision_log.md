@@ -110,3 +110,74 @@ Rationale:
 Consequences:
 - Prompt templates should describe allowed context, tool schemas, and output contracts.
 
+## D-009 - BO-01 Uses Optional Extras Only
+
+Decision:
+- BO dependencies are declared as optional extras: `bo`, `bo-gp`, `bo-ax`, and
+  `bo-analysis`.
+
+Rationale:
+- The base tutorial should remain runnable without SciPy, PyTorch, GPyTorch, BoTorch,
+  or Ax installed.
+
+Consequences:
+- BO-01 infrastructure does not import optional BO packages.
+- Resolver compatibility was checked on the available Python 3.12.13 runtime; Python
+  3.14 runtime compatibility remains unverified locally.
+
+## D-010 - BO Records Wrap Existing Ledger Rows
+
+Decision:
+- `BOExperimentRecord` wraps `ExperimentRecord` rather than changing the canonical
+  ledger schema.
+
+Rationale:
+- Existing CSV/JSON ledgers, demos, notebooks, benchmark summaries, and LLM context all
+  depend on `ExperimentRecord` remaining stable.
+
+Consequences:
+- BO metadata such as candidate IDs, acquisition values, posterior summaries, and
+  training observation IDs live in BO-specific artifacts.
+- Legacy `ExperimentRecord` rows can be wrapped with no proposal attached.
+
+## D-011 - Optimizer Visibility Is Explicit
+
+Decision:
+- `VirtualASDBackend.optimizer_view()` exposes scenario, description, objective, and
+  safety bounds, while surface parameters, noise, and process-time constants remain in
+  a separate simulator-only view.
+
+Rationale:
+- Future optimizer benchmarks need a clean boundary between information available to
+  optimizers and hidden virtual-lab parameters.
+
+Consequences:
+- Tests assert that optimizer-facing records and backend context do not contain hidden
+  simulator fields such as surface growth rates or nucleation delays.
+
+## D-012 - Run Reproducibility Metadata Is a First-Class Artifact
+
+Decision:
+- `RunManifest`, `OptimizerState`, and `BORunRecord` are Pydantic JSON artifacts.
+
+Rationale:
+- BO benchmarks need reproducible manifests before GP state, acquisition diagnostics,
+  and hybrid-agent behavior are added.
+
+Consequences:
+- Later BO stages can save optimizer checkpoints and run manifests without changing
+  legacy demo or benchmark outputs.
+
+## D-013 - Avoid Python 3.14-Only Syntax in Runtime Code
+
+Decision:
+- BO-01 avoids syntax that the available Python 3.12.13 runtime cannot parse, even when
+  ruff targeting Python 3.14 can format it.
+
+Rationale:
+- Baseline verification and BO-01 tests currently run on Python 3.12.13 in this
+  workspace.
+
+Consequences:
+- The code remains executable in the verified local runtime while the project still
+  documents that Python 3.14 runtime compatibility has not been locally verified.

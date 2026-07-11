@@ -48,20 +48,34 @@ Future BO work should be layered as follows:
 
 ## Dependency Strategy
 
-No dependency changes are part of BO-00.
+BO-00 made no dependency changes. BO-01 adds optional dependency extras only; the
+base tutorial path remains unchanged.
+
+BO-01 dependency resolution was performed with a pip dry run on the available
+Windows Python 3.12.13 runtime. The resolved optional stack was:
+
+- `bo`: SciPy 1.18.0 and scikit-learn 1.9.0.
+- `bo-gp`: PyTorch 2.13.0, GPyTorch 1.15.2, and BoTorch 0.18.1.
+- `bo-ax`: Ax platform 1.3.1.
+- `bo-analysis`: statsmodels 0.14.6, seaborn 0.13.2, and tqdm 4.68.4.
+
+These packages are declared as optional extras and are not imported by top-level
+package modules. The dry run did not install the heavy BO stack. Python 3.14
+runtime compatibility was not verified locally.
 
 ### PyTorch
 
-- Add PyTorch only as an optional dependency extra in a later task, likely `bo`.
-- Verify wheel support for the project's declared Python target before adding a
-  requirement. BO-00 did not verify Python 3.14 runtime compatibility.
+- PyTorch is declared only in the `bo-gp` optional extra.
+- BO-01 verified resolver compatibility on Python 3.12.13 only. It did not verify
+  wheel availability on a Python 3.14 interpreter.
 - Keep CPU-only installation instructions separate from CUDA-specific instructions.
 - Avoid importing `torch` from package top-level modules so non-BO users can keep using
   the simulator without PyTorch installed.
 
 ### GPyTorch
 
-- Add GPyTorch only after PyTorch compatibility is confirmed.
+- GPyTorch is declared only in the `bo-gp` optional extra and is not imported by BO-01
+  infrastructure.
 - Use it for Gaussian-process model definitions and likelihoods, not for domain
   normalization or ledger conversion.
 - Keep the first GPyTorch wrapper minimal and covered by deterministic tests on small
@@ -69,6 +83,7 @@ No dependency changes are part of BO-00.
 
 ### BoTorch
 
+- BoTorch is declared only in the `bo-gp` optional extra.
 - Prefer BoTorch for acquisition functions, candidate generation, and constrained BO
   once the basic GP path is stable.
 - Keep BoTorch-specific objects behind adapter functions so benchmark and agent code
@@ -77,16 +92,17 @@ No dependency changes are part of BO-00.
 
 ### Ax
 
-- Treat Ax as optional and probably tutorial-facing rather than core infrastructure.
+- Ax is declared separately in `bo-ax` and should remain tutorial-facing rather than
+  core infrastructure.
 - Consider Ax only after BoTorch-based flows are working, because Ax may obscure the
   mechanics that the tutorial is meant to teach.
 - If included, place it behind a separate optional extra such as `bo-ax`.
 
 ### Scientific Analysis Dependencies
 
-- Potential later additions: `scipy`, `scikit-learn`, `statsmodels`, `seaborn`, and
-  `tqdm`.
-- Add analysis dependencies only when a specific stage needs them.
+- SciPy and scikit-learn are declared in the `bo` extra for shared BO utilities and
+  future non-GP comparisons.
+- statsmodels, seaborn, and tqdm are declared separately in `bo-analysis`.
 - Keep statistical reporting reproducible by recording seeds, repetitions, scenario
   names, method names, and versions in benchmark outputs.
 
@@ -95,43 +111,54 @@ No dependency changes are part of BO-00.
 ### BO-01: Shared BO Infrastructure
 
 Purpose:
-- Create the reusable BO substrate: search-space definitions, variable normalization,
-  ledger-to-observation conversion, candidate validation, and interfaces for surrogate
-  models and acquisition functions.
+- Create the reusable BO substrate for later stages without implementing Gaussian
+  processes or acquisition functions.
+- Add typed interfaces, proposal records, optimizer-visible observations, run
+  manifests, optimizer checkpoints, and run-record serialization.
+- Provide a `VirtualASDBackend` that wraps the existing simulator and preserves hidden
+  simulator parameters outside optimizer-facing records.
 
 Dependencies:
-- Existing `ProcessConfig`, `SafetyBounds`, `ExperimentCondition`, `ExperimentRecord`,
-  `validate_safety`, and `run_conditions`.
-- No PyTorch/GPyTorch/BoTorch dependency unless explicitly approved in BO-01.
+- Existing `ProcessConfig`, `ExperimentCondition`, `ExperimentRecord`, `OptimizationRun`,
+  `VirtualLab`, `validate_safety`, and `run_conditions`.
+- Optional BO dependencies are declared in extras, but BO-01 code does not import the
+  heavy GP stack.
 
 Expected files:
 - `src/asd_agent/bo/__init__.py`
-- `src/asd_agent/bo/domain.py`
-- `src/asd_agent/bo/observations.py`
-- `src/asd_agent/bo/transforms.py`
-- `src/asd_agent/bo/candidates.py`
-- `tests/test_bo_domain.py`
-- `tests/test_bo_observations.py`
-- Documentation updates for BO concepts.
+- `src/asd_agent/bo/interfaces.py`
+- `src/asd_agent/bo/records.py`
+- `src/asd_agent/bo/backend.py`
+- `src/asd_agent/bo/serialization.py`
+- `tests/test_bo_backend.py`
+- `tests/test_bo_records.py`
+- `docs/implementation/BO-01.md`
+- Updates to this roadmap and `docs/bo_decision_log.md`.
 
 Acceptance criteria:
 - Existing baseline tests remain unchanged and passing.
-- Safety bounds can be converted to and from normalized search-space coordinates.
-- A list of `ExperimentRecord` objects can be converted into BO training observations
-  without changing the ledger format.
-- Candidate conversion never produces out-of-bounds `ExperimentCondition` values.
+- Candidate proposal IDs are unique.
+- BO records serialize and deserialize as JSON.
+- Run manifests record commit, config hash, Python version, dependency versions,
+  operating system, named seeds, method, scenario, budget, and timestamps.
+- `VirtualASDBackend` executes the existing simulator and rejects unsafe candidates.
+- Optimizer-facing records exclude hidden simulator surface parameters.
+- Existing `ExperimentRecord` rows can be wrapped for backward compatibility.
 
 Tests:
-- Round-trip normalized and raw parameters.
-- Ledger conversion for empty, one-record, and multi-record cases.
-- Safety rejection for invalid normalized or raw candidates.
-- Determinism of candidate utilities when seeds are supplied.
+- Candidate ID uniqueness.
+- BO record, optimizer-state, and run-record round trips.
+- Manifest creation.
+- Simulator backend execution and safety rejection.
+- Hidden-field exclusion from optimizer-visible payloads.
+- Backward-compatible wrapping of existing records.
 
 Explicit non-goals:
 - No Gaussian-process fitting.
 - No acquisition optimization.
-- No benchmark changes beyond tests for shared utilities.
-- No dependency additions unless BO-01 explicitly revises this plan.
+- No Stage 1 process models.
+- No Stage 2 constrained optimization.
+- No hybrid LLM-BO behavior.
 
 ### BO-02: Stage 1 Process Models and Oracle
 
@@ -434,4 +461,3 @@ Explicit non-goals:
 - No real-lab deployment automation.
 - No undisclosed credentials or prompt logs.
 - No expanded chemistry claims.
-
