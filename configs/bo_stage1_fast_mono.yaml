@@ -1,0 +1,17 @@
+scenario_id: bo_stage1_fast_mono
+description: Fast mono-exponential Stage 1 saturation process for tutorial evaluation.
+seed: 2101
+dose_bounds_s:
+  min: 0.0
+  max: 6.0
+objective:
+  mode: known_target
+  saturation_fraction: 0.95
+  target_growth: 0.92
+process:
+  family: mono_exponential
+  g_inf: 1.0
+  k: 1.6
+  observation_noise_sigma: 0.0
+process_time_fixed_s: 2.0
+process_time_per_s_dose: 1.0

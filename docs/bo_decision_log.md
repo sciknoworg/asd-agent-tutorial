@@ -181,3 +181,63 @@ Rationale:
 Consequences:
 - The code remains executable in the verified local runtime while the project still
   documents that Python 3.14 runtime compatibility has not been locally verified.
+
+## D-014 - Stage 1 Uses a Separate One-Dimensional Dose Type
+
+Decision:
+- BO-02 introduces `Stage1Dose` and `Stage1ExperimentRecord` instead of forcing Stage
+  1 processes into the ASD `ExperimentCondition` schema.
+
+Rationale:
+- Stage 1 is a one-dimensional precursor-dose teaching problem. Reusing the full ASD
+  condition would add irrelevant temperature, inhibitor, coreactant, and cycle fields.
+
+Consequences:
+- Stage 1 code lives under `asd_agent.bo` and does not change the existing ASD ledger.
+- Later adapters can convert Stage 1 observations into GP training arrays without
+  touching `ExperimentRecord`.
+
+## D-015 - Stage 1 Oracle Is Evaluation-Only
+
+Decision:
+- The Stage 1 oracle reports true saturation values, t95 values, dense true curves, and
+  non-self-limited classifications only through evaluation-specific classes.
+
+Rationale:
+- Active-learning benchmarks need hidden truth for scoring while optimizers must work
+  from safe public context and noisy observations.
+
+Consequences:
+- `Stage1Config.optimizer_view()` and `Stage1ExperimentRecord` exclude process family,
+  rate constants, true t95, true asymptote, and scenario labels.
+- Tests explicitly check for oracle leakage.
+
+## D-016 - Known Target and Inferred Asymptote Remain Explicit Modes
+
+Decision:
+- `Stage1Objective` validates `known_target` and `inferred_asymptote` as distinct
+  modes. Known-target mode requires `target_growth`; inferred-asymptote mode forbids
+  it.
+
+Rationale:
+- The two learning tasks have different information assumptions and should not be
+  silently mixed.
+
+Consequences:
+- Optimizer views expose `target_growth` only for known-target scenarios.
+- Inferred-asymptote scenarios require the optimizer to infer the plateau from
+  observations; the oracle still uses the true asymptote for evaluation metrics.
+
+## D-017 - Non-Self-Limited Growth Has No Meaningful Saturation Threshold
+
+Decision:
+- The weakly non-self-limited Stage 1 family is classified as lacking a meaningful
+  saturation threshold, even though it can cross finite response levels numerically.
+
+Rationale:
+- A continuing linear tail is a failure mode for saturation declaration, not a hidden
+  optimum to optimize around.
+
+Consequences:
+- The oracle returns no true saturation value or true t95 for this family.
+- Recommendation metrics can flag false saturation declarations.

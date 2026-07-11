@@ -163,36 +163,60 @@ Explicit non-goals:
 ### BO-02: Stage 1 Process Models and Oracle
 
 Purpose:
-- Define simple Stage 1 process models and an oracle interface for BO tutorials before
-  using the full ASD constraints.
+- Define one-dimensional Stage 1 saturation-process families and an evaluation-only
+  oracle for ALD precursor-dose active-learning tutorials.
+- Support known-target and inferred-asymptote modes as separate configuration modes.
+- Prepare recommendation metrics without implementing adaptive optimization.
 
 Dependencies:
 - BO-01 shared infrastructure.
-- Existing simulator equations may be reused, but Stage 1 should remain simpler than
-  the full ASD scenario set.
+- Existing JSON-compatible YAML configuration loading.
+- NumPy and Matplotlib from the base tutorial dependencies.
 
 Expected files:
 - `src/asd_agent/bo/stage1.py`
 - `src/asd_agent/bo/oracle.py`
-- `configs/bo_stage1_*.yaml` if configuration is needed.
+- `configs/bo_stage1_fast_mono.yaml`
+- `configs/bo_stage1_slow_mono.yaml`
+- `configs/bo_stage1_soft_biexponential.yaml`
+- `configs/bo_stage1_noisy.yaml`
+- `configs/bo_stage1_weak_nonselflimited.yaml`
+- `configs/bo_stage1_misspecified.yaml`
+- `scripts/plot_stage1_processes.py`
 - `tests/test_bo_stage1.py`
-- Notebook or docs additions only if approved for this stage.
+- `docs/implementation/BO-02.md`
+- Updates to this roadmap and `docs/bo_decision_log.md`.
 
 Acceptance criteria:
-- Stage 1 oracle returns deterministic outputs for fixed seeds and noise settings.
-- Stage 1 inputs can be represented as `ExperimentCondition` or a clearly documented
-  BO-specific input type with adapters.
-- Stage 1 outputs identify objective values and optional noise separately.
+- Six configured process families are loadable through the repository configuration
+  system.
+- Stage 1 virtual lab observations are deterministic for fixed seeds and noise
+  settings.
+- The oracle reports finite saturation values, analytical t95 where available,
+  numerical t95 for non-analytical monotonic models, dense true curves, and
+  non-self-limited classifications.
+- Optimizer-facing views and records do not expose hidden process families, rate
+  constants, true t95, true asymptotes, or scenario labels.
+- Recommendation metrics include estimated and true t95, absolute and relative error,
+  growth fraction, dose overshoot, cumulative dose, cumulative process time, and false
+  saturation declarations.
 
 Tests:
-- Deterministic oracle behavior.
-- Known optimum or reference behavior for synthetic process models.
-- Bounds and invalid-input handling.
+- Monotonic mono-exponential behavior.
+- Analytical t95 formula.
+- Numerical t95 for soft saturation.
+- Soft-saturation stability.
+- Deterministic noisy observations.
+- Non-self-limited oracle classification.
+- Model-misspecified saturation behavior.
+- Known-target and inferred-asymptote separation.
+- Oracle isolation from optimizer-facing APIs.
 
 Explicit non-goals:
-- No constrained multi-objective optimization.
+- No GP fitting.
+- No adaptive experiment selection.
+- No Stage 2 work.
 - No LLM integration.
-- No changes to the three existing ASD scenarios.
 
 ### BO-03: Stage 1 Generic GP and Grid Comparison
 

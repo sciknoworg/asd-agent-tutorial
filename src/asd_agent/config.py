@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from asd_agent.models import ProcessConfig
+
+if TYPE_CHECKING:
+    from asd_agent.bo.stage1 import Stage1Config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = PROJECT_ROOT / "configs"
@@ -15,26 +18,58 @@ CONFIG_DIR = PROJECT_ROOT / "configs"
 def load_config(path: str | Path) -> ProcessConfig:
     """Load a scenario config from JSON-compatible YAML."""
 
+    return ProcessConfig.model_validate(load_config_mapping(path))
+
+
+def load_config_mapping(path: str | Path) -> dict[str, Any]:
+    """Load a JSON-compatible YAML file as a mapping."""
+
     config_path = Path(path)
     text = config_path.read_text(encoding="utf-8")
-    data: dict[str, Any]
+    loaded: Any
     try:
         import yaml  # type: ignore[import-untyped]
 
         loaded = yaml.safe_load(text)
-        if not isinstance(loaded, dict):
-            raise ValueError("scenario config must be a mapping")
-        data = loaded
     except ModuleNotFoundError:
-        data = json.loads(text)
-    return ProcessConfig.model_validate(data)
+        loaded = json.loads(text)
+    if not isinstance(loaded, dict):
+        raise ValueError("scenario config must be a mapping")
+    return loaded
 
 
 def load_scenario(name: str) -> ProcessConfig:
     """Load one of the predefined tutorial scenarios."""
 
     path = CONFIG_DIR / f"{name}.yaml"
+    if name.startswith("bo_stage1_"):
+        raise FileNotFoundError(f"{name!r} is a Stage 1 scenario; use load_stage1_scenario instead")
     if not path.exists():
-        available = sorted(item.stem for item in CONFIG_DIR.glob("*.yaml"))
+        available = sorted(
+            item.stem
+            for item in CONFIG_DIR.glob("*.yaml")
+            if not item.stem.startswith("bo_stage1_")
+        )
         raise FileNotFoundError(f"unknown scenario {name!r}; available: {available}")
     return load_config(path)
+
+
+def load_stage1_config(path: str | Path) -> Stage1Config:
+    """Load a Stage 1 saturation-process config from JSON-compatible YAML."""
+
+    from asd_agent.bo.stage1 import Stage1Config
+
+    return Stage1Config.model_validate(load_config_mapping(path))
+
+
+def load_stage1_scenario(name: str) -> Stage1Config:
+    """Load one of the BO Stage 1 scenarios."""
+
+    stem = name if name.startswith("bo_stage1_") else f"bo_stage1_{name}"
+    path = CONFIG_DIR / f"{stem}.yaml"
+    if not path.exists():
+        available = sorted(
+            item.stem.removeprefix("bo_stage1_") for item in CONFIG_DIR.glob("bo_stage1_*.yaml")
+        )
+        raise FileNotFoundError(f"unknown Stage 1 scenario {name!r}; available: {available}")
+    return load_stage1_config(path)

@@ -1,0 +1,17 @@
+scenario_id: bo_stage1_misspecified
+description: Saturating Stage 1 process that is intentionally misspecified for mono-exponential fits.
+seed: 2106
+dose_bounds_s:
+  min: 0.0
+  max: 12.0
+objective:
+  mode: inferred_asymptote
+  saturation_fraction: 0.95
+process:
+  family: misspecified_saturation
+  g_inf: 1.1
+  k: 0.7
+  misspecification_power: 0.58
+  observation_noise_sigma: 0.0
+process_time_fixed_s: 2.0
+process_time_per_s_dose: 1.0

@@ -1,0 +1,17 @@
+scenario_id: bo_stage1_weak_nonselflimited
+description: Weakly non-self-limited Stage 1 process with a small linear tail.
+seed: 2105
+dose_bounds_s:
+  min: 0.0
+  max: 14.0
+objective:
+  mode: inferred_asymptote
+  saturation_fraction: 0.95
+process:
+  family: weakly_non_self_limited
+  g_inf: 0.8
+  k: 0.8
+  linear_slope: 0.015
+  observation_noise_sigma: 0.0
+process_time_fixed_s: 2.0
+process_time_per_s_dose: 1.0

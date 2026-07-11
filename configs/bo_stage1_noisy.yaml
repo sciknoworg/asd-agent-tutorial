@@ -1,0 +1,17 @@
+scenario_id: bo_stage1_noisy
+description: Noisy mono-exponential Stage 1 saturation process for tutorial evaluation.
+seed: 2104
+dose_bounds_s:
+  min: 0.0
+  max: 10.0
+objective:
+  mode: known_target
+  saturation_fraction: 0.95
+  target_growth: 0.9
+process:
+  family: noisy_saturation
+  g_inf: 1.0
+  k: 0.75
+  observation_noise_sigma: 0.035
+process_time_fixed_s: 2.0
+process_time_per_s_dose: 1.0
