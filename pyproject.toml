@@ -27,6 +27,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+bo = [
+  "scipy>=1.18,<2",
+  "scikit-learn>=1.9,<2",
+]
+bo-gp = [
+  "torch>=2.13,<3",
+  "gpytorch>=1.15,<2",
+  "botorch>=0.18,<1",
+]
+bo-ax = ["ax-platform>=1.3,<2"]
+bo-analysis = ["statsmodels>=0.14.6,<0.15", "seaborn>=0.13.2,<0.14", "tqdm>=4.67,<5"]
 llm = ["openai>=1.0"]
 notebooks = ["jupyterlab>=4.0", "nbformat>=5.10"]
 dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.10", "types-PyYAML>=6.0"]
