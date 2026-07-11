@@ -221,13 +221,16 @@ Explicit non-goals:
 ### BO-03: Stage 1 Generic GP and Grid Comparison
 
 Purpose:
-- Implement and benchmark a generic Gaussian-process BO loop on Stage 1 models, then
-  compare it against grid search.
+- Implement and benchmark fixed-grid and generic Gaussian-process active-learning
+  loops on Stage 1 models.
+- Use a threshold-oriented decision rule because Stage 1 is about finding the smallest
+  tested dose that reaches a saturation threshold, not maximizing growth.
 
 Dependencies:
 - BO-01 and BO-02.
-- PyTorch and GPyTorch only after compatibility is verified and dependencies are added
-  in this stage or a prerequisite stage.
+- Optional BO-GP dependencies from BO-01: PyTorch, GPyTorch, and BoTorch.
+- Local verification used the bundled Python 3.12.13 runtime with PyTorch 2.13.0+cpu,
+  GPyTorch 1.15.2, and BoTorch 0.18.1.
 
 Expected files:
 - `src/asd_agent/bo/gp.py`
@@ -235,18 +238,30 @@ Expected files:
 - `src/asd_agent/bo/optimizers.py`
 - `tests/test_bo_gp.py`
 - `tests/test_bo_acquisition.py`
-- Benchmark additions under `src/asd_agent/benchmark.py` or a BO-specific benchmark
-  module.
+- `scripts/compare_stage1_methods.py`
+- `docs/implementation/BO-03.md`
 
 Acceptance criteria:
-- Generic GP BO runs reproducibly on Stage 1 oracle problems.
-- Grid-search comparison uses the same budget accounting.
-- Benchmark output records success rate, experiment count, best objective, and seed.
+- Generic GP BO runs reproducibly on Stage 1 process-family problems using float64,
+  normalized inputs, standardized outputs, a stationary Matern kernel, and explicit
+  known-noise or inferred-noise modes.
+- Grid-search comparison uses predetermined dose grids, shared initial observations,
+  matched simulator seeds, and the same experiment budget as adaptive methods.
+- Threshold decisions evaluate posterior target probability over a candidate grid,
+  prefer the smallest sufficiently probable untested dose, fall back to uncertainty
+  reduction near the threshold, and return explicit failures when no valid candidate
+  remains.
+- Final recommendations refer only to tested Stage 1 experiment IDs.
+- Smoke comparison output records method, scenario, status, experiment count,
+  recommendation, best observed growth, cumulative dose, and cumulative process time.
 
 Tests:
 - GP model can fit a tiny deterministic dataset.
-- Acquisition scores finite candidate sets without NaNs.
+- Acquisition scores finite candidate sets without NaNs and handles duplicate
+  candidates.
 - BO loop does not repeat a tested candidate unless the candidate set is exhausted.
+- Deterministic suggestions, tested recommendations, fit-failure recording, state
+  save/restore, and matched smoke comparisons are covered.
 
 Explicit non-goals:
 - No physics-informed kernels yet.

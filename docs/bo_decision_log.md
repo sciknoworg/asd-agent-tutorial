@@ -241,3 +241,67 @@ Rationale:
 Consequences:
 - The oracle returns no true saturation value or true t95 for this family.
 - Recommendation metrics can flag false saturation declarations.
+
+## D-018 - BO-03 Uses Threshold-Oriented Active Learning
+
+Decision:
+- Stage 1 generic-GP acquisition evaluates posterior target probability over a finite
+  candidate grid, chooses the smallest untested dose above a probability threshold, and
+  otherwise samples the point with highest uncertainty-weighted proximity to the
+  threshold.
+
+Rationale:
+- The Stage 1 tutorial question is "what is the smallest tested dose that reaches
+  saturation?", not "where is growth largest?" A maximum-growth acquisition would
+  bias comparisons toward unnecessarily high doses.
+
+Consequences:
+- The acquisition rule is implemented in `asd_agent.bo.acquisition` and is testable
+  without fitting a GP.
+- Candidate recommendations include posterior summaries and acquisition values when
+  available.
+
+## D-019 - Stage 1 Recommendations Must Reference Tested Rows
+
+Decision:
+- BO-03 results store `recommended_experiment_id`, and successful recommendations are
+  generated only from the Stage 1 experiment ledger.
+
+Rationale:
+- This mirrors the existing LLM-agent safety rule that a final recommendation cannot
+  point to an untested condition.
+
+Consequences:
+- The generic GP may propose untested candidates during the loop, but its final
+  recommendation is the smallest tested row meeting the current threshold estimate.
+- Tests assert that the recommended experiment ID is present in the ledger.
+
+## D-020 - Generic GP Stays in Optional BO Modules
+
+Decision:
+- BoTorch, GPyTorch, and PyTorch imports live in `asd_agent.bo.gp` and are not imported
+  by `asd_agent.bo.__init__`.
+
+Rationale:
+- Base simulator, LLM, notebook, and legacy benchmark users should not need the heavy
+  GP stack unless they use BO-03 functionality.
+
+Consequences:
+- BO-03 tests use optional dependency gates where appropriate.
+- Mypy ignores missing GPyTorch stubs because the installed package lacks a `py.typed`
+  marker.
+
+## D-021 - Stage 1 Grid and GP Share Initial Observations
+
+Decision:
+- BO-03 runners evaluate matched initial Stage 1 doses before method-specific
+  candidate selection.
+
+Rationale:
+- Grid and adaptive comparisons should differ in selection strategy, not in starting
+  information, simulator seed, or budget accounting.
+
+Consequences:
+- `Stage1RunnerSettings` records the shared budget, initial dose fractions or explicit
+  doses, simulator seed, optimizer seed, and minimum observations before
+  recommendation.

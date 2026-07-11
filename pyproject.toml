@@ -71,3 +71,7 @@ warn_unused_ignores = false
 [[tool.mypy.overrides]]
 module = ["openai"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["gpytorch", "gpytorch.*"]
+ignore_missing_imports = true
