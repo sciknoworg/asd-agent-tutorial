@@ -1,0 +1,25 @@
+profile_id: bo_stage2_smoke
+description: Small CPU-only Stage 2 comparison for tests and tutorial examples.
+scenarios:
+  - inherent_selectivity
+  - narrow_selective_window
+  - impossible_selectivity
+methods:
+  - random_search
+  - grid_search
+  - rule_based
+  - stage2_mobo
+repetitions: 1
+budget: 3
+initial_design_size: 2
+simulator_seed: 7207
+optimizer_seed: 8207
+grid_precursor_points: 2
+grid_temperature_points: 2
+candidate_cycle_values: [30, 50, 70]
+mobo_qmc_samples: 8
+mobo_num_restarts: 1
+mobo_raw_samples: 8
+mobo_acquisition_timeout_s: 2.0
+random_fallback_points: 32
+boundary_tolerance_fraction: 0.02

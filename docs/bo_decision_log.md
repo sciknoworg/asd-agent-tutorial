@@ -518,3 +518,80 @@ Rationale:
 Consequences:
 - Existing simulator, baseline, LLM, and notebook imports remain unchanged.
 - Users import Stage 2 MOBO directly from `asd_agent.bo.stage2_mobo`.
+
+## D-036 - BO-07 Uses Fixed-Budget Hypervolume AUC
+
+Decision:
+- Stage 2 benchmark comparisons use area under the feasible observed hypervolume
+  trajectory as the primary endpoint.
+
+Rationale:
+- A final feasible hit alone does not distinguish early discovery from late discovery
+  or sustained Pareto improvement. Hypervolume trajectory AUC rewards methods that
+  find feasible useful tradeoffs earlier under the same budget.
+
+Consequences:
+- All methods are evaluated over a fixed budget for trajectory metrics.
+- Secondary endpoints still report final success, first feasible experiment, final
+  hypervolume, regret, violations, boundary proposals, and failures.
+
+## D-037 - Stage 2 Baselines Use Stage 2 Variables Only
+
+Decision:
+- BO-07 implements Stage 2 benchmark adapters for random search, grid search, and the
+  deterministic rule-based plan using precursor dose, temperature, and integer cycle
+  count while keeping coreactant and inhibitor doses fixed by scenario.
+
+Rationale:
+- Stage 2 was defined as a three-variable constrained problem in BO-05. Comparing
+  methods in a five-variable legacy search space would no longer match the constrained
+  MOBO problem.
+
+Consequences:
+- Legacy baseline modules remain unchanged.
+- Stage 2 benchmark methods live in `asd_agent.bo.stage2_benchmark`.
+
+## D-038 - Initial Designs Are Matched Across Methods
+
+Decision:
+- BO-07 uses matched seeded Sobol initial observations for all Stage 2 benchmark
+  methods in a profile.
+
+Rationale:
+- The first observations should not advantage one method through different starting
+  information. After the shared initial design, each method controls its own
+  additional proposals.
+
+Consequences:
+- Profile fields record simulator seeds, optimizer seeds, budget, initial design size,
+  and cycle candidates.
+- Random, grid, rule-based, and MOBO runs can be compared from the same starting
+  evidence.
+
+## D-039 - Analysis Artifacts Are Figure-CSV Pairs
+
+Decision:
+- Every BO-07 analysis figure is generated with a CSV source file of the same stem in
+  the same directory.
+
+Rationale:
+- The tutorial should be reproducible and inspectable without reverse-engineering
+  plotted values from images.
+
+Consequences:
+- The analysis module exports trajectory, Pareto, hypervolume, regret, robustness, and
+  failure-taxonomy source data beside PNG figures.
+- Tests assert that generated PNG files have matching CSV files.
+
+## D-040 - BO-07 Profiles Stay Tutorial-Scale
+
+Decision:
+- BO-07 adds smoke and pilot profiles only.
+
+Rationale:
+- The task explicitly excludes paper-scale profiles.
+
+Consequences:
+- `bo_stage2_smoke_profile` is suitable for tests and notebooks.
+- `bo_stage2_pilot_profile` increases scenarios, repetitions, and budget modestly but
+  remains a CPU-friendly exploratory profile.

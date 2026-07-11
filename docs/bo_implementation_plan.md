@@ -440,34 +440,52 @@ Explicit non-goals:
 ### BO-07: Stage 2 Benchmark and Analysis
 
 Purpose:
-- Extend benchmarking and plotting to compare BO methods against existing baselines on
-  the Stage 2 ASD scenarios.
+- Extend benchmarking and plotting to compare random search, grid search,
+  deterministic rule-based search, and constrained MOBO on the Stage 2 ASD scenarios.
+- Use feasible-hypervolume trajectory AUC as the primary fixed-budget endpoint.
 
 Dependencies:
 - BO-06.
-- Existing benchmark and plotting modules.
+- Stage 2 benchmark observations, oracle hypervolume, and MOBO run records.
+- Existing configuration loading and Matplotlib plotting stack.
 
 Expected files:
-- `src/asd_agent/bo/benchmark.py` or additions to `src/asd_agent/benchmark.py`
-- `src/asd_agent/bo/analysis.py`
-- `tests/test_bo_benchmark.py`
-- Plotting additions for BO trajectories, constraint feasibility, and objective tradeoffs.
+- `src/asd_agent/bo/stage2_benchmark.py`
+- `src/asd_agent/bo/stage2_analysis.py`
+- `configs/bo_stage2_smoke_profile.yaml`
+- `configs/bo_stage2_pilot_profile.yaml`
+- `scripts/run_stage2_benchmark.py`
+- `tests/test_bo_stage2_benchmark.py`
+- `notebooks/06_constrained_multiobjective_asd_optimization.ipynb`
+- `docs/implementation/BO-07.md`
 
 Acceptance criteria:
-- Benchmarks run at least 20 independent repetitions by default or by documented CLI.
-- Output includes success rate, experiments required, best selectivity, GA/NGA
-  thickness, process time, and failure category.
-- BO-specific plots are generated without requiring live API access.
+- Stage 2 methods share scenario configs, simulator seeds, optimizer seeds, budgets,
+  and matched Sobol initial designs where applicable.
+- Random, grid, and rule-based methods operate on the Stage 2 variables only:
+  precursor dose, temperature, and integer cycle count.
+- Primary endpoint is area under the feasible hypervolume trajectory under fixed
+  budget.
+- Secondary endpoints include final feasible success rate, experiments to first
+  feasible condition, final hypervolume, hypervolume regret, constraint-violation
+  counts, boundary proposals, and failure taxonomy.
+- Analysis exports search trajectories, observed and oracle Pareto fronts,
+  hypervolume trajectories, hypervolume AUC, final regret, experiments to first
+  feasible point, constraint-violation counts, robustness by scenario, and failure
+  taxonomy.
+- Every generated figure has a CSV source file beside it.
+- Smoke and pilot profiles are tutorial-scale and do not run paper-scale experiments.
 
 Tests:
 - Benchmark smoke run with small repetitions.
 - Summary-row schema compatibility.
-- Plot function smoke tests using a noninteractive backend.
+- Analysis-generation smoke test using a noninteractive backend.
 
 Explicit non-goals:
 - No LLM-BO hybrid behavior.
 - No statistical publication claims beyond descriptive benchmark summaries.
-- No dependency changes unrelated to analysis needs.
+- No dependency changes.
+- No paper-scale Stage 2 runs.
 
 ### BO-08: Hybrid LLM-BO Agent
 

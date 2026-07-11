@@ -1,0 +1,30 @@
+profile_id: bo_stage2_pilot
+description: Modest Stage 2 pilot profile; still not paper-scale.
+scenarios:
+  - inherent_selectivity
+  - inhibitor_selectivity
+  - narrow_selective_window
+  - noisy_measurements
+  - boundary_optimum
+  - soft_selectivity_breakdown
+  - model_misspecification
+  - impossible_selectivity
+methods:
+  - random_search
+  - grid_search
+  - rule_based
+  - stage2_mobo
+repetitions: 3
+budget: 6
+initial_design_size: 3
+simulator_seed: 7307
+optimizer_seed: 8307
+grid_precursor_points: 3
+grid_temperature_points: 3
+candidate_cycle_values: [30, 50, 60, 70, 80]
+mobo_qmc_samples: 16
+mobo_num_restarts: 2
+mobo_raw_samples: 24
+mobo_acquisition_timeout_s: 5.0
+random_fallback_points: 96
+boundary_tolerance_fraction: 0.02
