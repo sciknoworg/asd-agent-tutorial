@@ -10,6 +10,7 @@ from asd_agent.models import ProcessConfig
 
 if TYPE_CHECKING:
     from asd_agent.bo.stage1 import Stage1Config
+    from asd_agent.bo.stage2 import Stage2Config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = PROJECT_ROOT / "configs"
@@ -44,11 +45,13 @@ def load_scenario(name: str) -> ProcessConfig:
     path = CONFIG_DIR / f"{name}.yaml"
     if name.startswith("bo_stage1_"):
         raise FileNotFoundError(f"{name!r} is a Stage 1 scenario; use load_stage1_scenario instead")
+    if name.startswith("bo_stage2_"):
+        raise FileNotFoundError(f"{name!r} is a Stage 2 scenario; use load_stage2_scenario instead")
     if not path.exists():
         available = sorted(
             item.stem
             for item in CONFIG_DIR.glob("*.yaml")
-            if not item.stem.startswith("bo_stage1_")
+            if not item.stem.startswith(("bo_stage1_", "bo_stage2_"))
         )
         raise FileNotFoundError(f"unknown scenario {name!r}; available: {available}")
     return load_config(path)
@@ -73,3 +76,24 @@ def load_stage1_scenario(name: str) -> Stage1Config:
         )
         raise FileNotFoundError(f"unknown Stage 1 scenario {name!r}; available: {available}")
     return load_stage1_config(path)
+
+
+def load_stage2_config(path: str | Path) -> Stage2Config:
+    """Load a Stage 2 constrained ASD config from JSON-compatible YAML."""
+
+    from asd_agent.bo.stage2 import Stage2Config
+
+    return Stage2Config.model_validate(load_config_mapping(path))
+
+
+def load_stage2_scenario(name: str) -> Stage2Config:
+    """Load one of the BO Stage 2 scenarios."""
+
+    stem = name if name.startswith("bo_stage2_") else f"bo_stage2_{name}"
+    path = CONFIG_DIR / f"{stem}.yaml"
+    if not path.exists():
+        available = sorted(
+            item.stem.removeprefix("bo_stage2_") for item in CONFIG_DIR.glob("bo_stage2_*.yaml")
+        )
+        raise FileNotFoundError(f"unknown Stage 2 scenario {name!r}; available: {available}")
+    return load_stage2_config(path)

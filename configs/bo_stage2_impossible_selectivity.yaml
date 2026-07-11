@@ -1,0 +1,66 @@
+scenario_id: bo_stage2_impossible_selectivity
+description: Stage 2 ASD problem where GA and NGA remain too similar.
+process:
+  scenario: bo_stage2_impossible_selectivity
+  description: GA and NGA respond similarly, leaving no selective window in tested bounds.
+  seed: 4303
+  noise_sigma_nm: 0.02
+  per_cycle_overhead_s: 2.0
+  stabilization_time_s: 10.0
+  surfaces:
+    GA:
+      max_growth_per_cycle_nm: 0.09
+      precursor_tau_s: 1.1
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 2.0
+      inhibitor_sensitivity: 0.12
+      temperature_response_enabled: true
+      temperature_optimum_c: 180.0
+      temperature_width_c: 60.0
+      temperature_min_factor: 0.60
+    NGA:
+      max_growth_per_cycle_nm: 0.085
+      precursor_tau_s: 1.1
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 3.0
+      inhibitor_sensitivity: 0.12
+      temperature_response_enabled: true
+      temperature_optimum_c: 180.0
+      temperature_width_c: 60.0
+      temperature_min_factor: 0.60
+  safety:
+    precursor_dose_s: {min: 0.1, max: 8.0}
+    coreactant_dose_s: {min: 0.1, max: 8.0}
+    inhibitor_dose_s: {min: 0.0, max: 5.0}
+    temperature_c: {min: 100.0, max: 250.0}
+    cycles: {min: 5.0, max: 80.0}
+  objective:
+    ga_min_nm: 5.0
+    nga_max_nm: 0.5
+    selectivity_min: 0.80
+fixed_parameters:
+  coreactant_dose_s: 6.0
+  inhibitor_dose_s: 0.0
+hard_bounds:
+  precursor_dose_s: {min: 0.1, max: 8.0}
+  temperature_c: {min: 100.0, max: 250.0}
+  cycle_count: {min: 5.0, max: 80.0}
+  max_process_time_s: 1200.0
+constraints:
+  ga_min_nm: 5.0
+  nga_max_nm: 0.5
+  selectivity_min: 0.80
+objectives:
+  - maximize_ga
+  - minimize_nga
+  - minimize_process_time
+oracle_grid:
+  precursor_points: 13
+  temperature_points: 13
+  cycle_values: [30, 50, 60, 70, 80]
+metadata:
+  scientific_interpretation: Similar surfaces prevent selective ASD under the tested variables.
+  hidden_process_parameters: GA and NGA have nearly matched kinetics and temperature responses.
+  noise: Gaussian measurement noise with sigma 0.02 nm.
+  feasible_window_exists: false
+  expected_difficulty: impossible

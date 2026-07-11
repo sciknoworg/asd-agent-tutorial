@@ -1,0 +1,66 @@
+scenario_id: bo_stage2_boundary_optimum
+description: Stage 2 ASD problem where the feasible optimum sits near a hard temperature boundary.
+process:
+  scenario: bo_stage2_boundary_optimum
+  description: GA benefits from high temperature while NGA is suppressed near the upper boundary.
+  seed: 4606
+  noise_sigma_nm: 0.02
+  per_cycle_overhead_s: 2.0
+  stabilization_time_s: 10.0
+  surfaces:
+    GA:
+      max_growth_per_cycle_nm: 0.12
+      precursor_tau_s: 1.2
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 3.0
+      inhibitor_sensitivity: 0.04
+      temperature_response_enabled: true
+      temperature_optimum_c: 245.0
+      temperature_width_c: 30.0
+      temperature_min_factor: 0.30
+    NGA:
+      max_growth_per_cycle_nm: 0.08
+      precursor_tau_s: 1.2
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 55.0
+      inhibitor_sensitivity: 0.04
+      temperature_response_enabled: true
+      temperature_optimum_c: 160.0
+      temperature_width_c: 35.0
+      temperature_min_factor: 0.20
+  safety:
+    precursor_dose_s: {min: 0.5, max: 8.0}
+    coreactant_dose_s: {min: 0.1, max: 8.0}
+    inhibitor_dose_s: {min: 0.0, max: 5.0}
+    temperature_c: {min: 120.0, max: 250.0}
+    cycles: {min: 40.0, max: 80.0}
+  objective:
+    ga_min_nm: 4.5
+    nga_max_nm: 0.40
+    selectivity_min: 0.82
+fixed_parameters:
+  coreactant_dose_s: 6.0
+  inhibitor_dose_s: 0.0
+hard_bounds:
+  precursor_dose_s: {min: 0.5, max: 8.0}
+  temperature_c: {min: 120.0, max: 250.0}
+  cycle_count: {min: 40.0, max: 80.0}
+  max_process_time_s: 1250.0
+constraints:
+  ga_min_nm: 4.5
+  nga_max_nm: 0.40
+  selectivity_min: 0.82
+objectives:
+  - maximize_ga
+  - minimize_nga
+  - minimize_process_time
+oracle_grid:
+  precursor_points: 13
+  temperature_points: 13
+  cycle_values: [50, 60, 70, 80]
+metadata:
+  scientific_interpretation: The best feasible region is close to the allowed high-temperature edge.
+  hidden_process_parameters: GA temperature optimum is near the upper hard bound while NGA optimum is lower.
+  noise: Gaussian measurement noise with sigma 0.02 nm.
+  feasible_window_exists: true
+  expected_difficulty: hard

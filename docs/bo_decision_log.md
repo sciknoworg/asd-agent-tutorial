@@ -362,3 +362,63 @@ Rationale:
 Consequences:
 - `bo_stage1_smoke_profile` uses one repetition and a small candidate grid.
 - `bo_stage1_pilot_profile` uses three repetitions and remains CPU-friendly.
+
+## D-026 - Stage 2 Uses Three Decision Variables
+
+Decision:
+- BO-05 exposes only precursor dose, temperature, and integer cycle count as Stage 2
+  decision variables.
+
+Rationale:
+- The task scope is to prepare constrained multi-objective optimization without
+  expanding the search space prematurely.
+
+Consequences:
+- Coreactant dose and inhibitor dose are fixed scenario parameters.
+- Future MOBO methods must propose `Stage2Decision` values, not full
+  `ExperimentCondition` rows.
+
+## D-027 - Stage 2 Selectivity Is a Constraint, Not a Sole Objective
+
+Decision:
+- Stage 2 objectives are useful GA growth, NGA suppression, and process-time
+  reduction. Selectivity remains a configured feasibility constraint.
+
+Rationale:
+- Optimizing selectivity alone can favor near-zero growth and is not the stated
+  scientific goal.
+
+Consequences:
+- YAML thresholds include minimum GA thickness, maximum NGA thickness, and minimum
+  selectivity.
+- Pareto calculations use GA, NGA, and process time.
+
+## D-028 - Stage 2 Oracle Is Evaluation-Only
+
+Decision:
+- The Stage 2 oracle performs dense mixed-variable enumeration and reports feasible
+  regions, approximate Pareto front, approximate hypervolume, and selective-window
+  existence only through `Stage2EvaluationOracle`.
+
+Rationale:
+- Optimizers need measured outcomes and visible bounds, not hidden simulator truth or
+  oracle summaries.
+
+Consequences:
+- `Stage2Config.optimizer_view()` excludes surfaces, hidden process parameters,
+  oracle hypervolume, and selective-window labels.
+- Tests assert this isolation boundary.
+
+## D-029 - Stage 2 Scenario YAML Documents Hidden Context
+
+Decision:
+- Each `bo_stage2_*.yaml` file includes human-facing metadata for interpretation,
+  hidden process parameters, noise, feasibility, and expected difficulty.
+
+Rationale:
+- The tutorial should make failure modes and scenario intent explicit while keeping
+  optimizer-facing context restricted.
+
+Consequences:
+- `docs/stage2_scenarios.md` summarizes all Stage 2 scenarios.
+- The original three ASD scenario YAML files remain unchanged.

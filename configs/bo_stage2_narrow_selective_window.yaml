@@ -1,0 +1,66 @@
+scenario_id: bo_stage2_narrow_selective_window
+description: Stage 2 ASD problem with a narrow cycle-count window before NGA nucleation.
+process:
+  scenario: bo_stage2_narrow_selective_window
+  description: A feasible window exists only shortly before NGA nucleation begins.
+  seed: 4404
+  noise_sigma_nm: 0.015
+  per_cycle_overhead_s: 2.0
+  stabilization_time_s: 10.0
+  surfaces:
+    GA:
+      max_growth_per_cycle_nm: 0.105
+      precursor_tau_s: 0.9
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 3.0
+      inhibitor_sensitivity: 0.04
+      temperature_response_enabled: true
+      temperature_optimum_c: 185.0
+      temperature_width_c: 45.0
+      temperature_min_factor: 0.50
+    NGA:
+      max_growth_per_cycle_nm: 0.085
+      precursor_tau_s: 1.1
+      coreactant_tau_s: 1.2
+      nucleation_delay_cycles: 62.0
+      inhibitor_sensitivity: 0.05
+      temperature_response_enabled: true
+      temperature_optimum_c: 185.0
+      temperature_width_c: 45.0
+      temperature_min_factor: 0.50
+  safety:
+    precursor_dose_s: {min: 0.2, max: 7.0}
+    coreactant_dose_s: {min: 0.1, max: 8.0}
+    inhibitor_dose_s: {min: 0.0, max: 5.0}
+    temperature_c: {min: 120.0, max: 235.0}
+    cycles: {min: 40.0, max: 75.0}
+  objective:
+    ga_min_nm: 5.0
+    nga_max_nm: 0.30
+    selectivity_min: 0.88
+fixed_parameters:
+  coreactant_dose_s: 6.0
+  inhibitor_dose_s: 0.0
+hard_bounds:
+  precursor_dose_s: {min: 0.2, max: 7.0}
+  temperature_c: {min: 120.0, max: 235.0}
+  cycle_count: {min: 40.0, max: 75.0}
+  max_process_time_s: 1000.0
+constraints:
+  ga_min_nm: 5.0
+  nga_max_nm: 0.30
+  selectivity_min: 0.88
+objectives:
+  - maximize_ga
+  - minimize_nga
+  - minimize_process_time
+oracle_grid:
+  precursor_points: 13
+  temperature_points: 13
+  cycle_values: [45, 55, 60, 64, 70, 75]
+metadata:
+  scientific_interpretation: The useful process region is a short cycle interval before NGA nucleation.
+  hidden_process_parameters: NGA nucleation delay is close to the GA thickness threshold cycles.
+  noise: Low Gaussian measurement noise with sigma 0.015 nm.
+  feasible_window_exists: true
+  expected_difficulty: hard

@@ -329,6 +329,8 @@ Explicit non-goals:
 Purpose:
 - Define the Stage 2 ASD BO problem using GA thickness, NGA thickness, selectivity,
   process time, safety bounds, and scenario-specific objectives.
+- Prepare the two-surface ASD simulator for constrained multi-objective optimization
+  without implementing a MOBO acquisition function.
 
 Dependencies:
 - BO-01 shared infrastructure.
@@ -337,25 +339,42 @@ Dependencies:
 
 Expected files:
 - `src/asd_agent/bo/stage2.py`
-- `src/asd_agent/bo/objectives.py`
-- `configs/bo_stage2_*.yaml` if separate BO configs are needed.
-- `tests/test_bo_stage2_problem.py`
+- `src/asd_agent/bo/stage2_oracle.py`
+- `configs/bo_stage2_*.yaml`
+- `scripts/plot_stage2_oracle_surfaces.py`
+- `tests/test_bo_stage2.py`
+- `docs/stage2_scenarios.md`
+- `docs/implementation/BO-05.md`
 
 Acceptance criteria:
 - Stage 2 problem definitions can be built from existing `ProcessConfig` objects.
-- Objective and constraint outputs are explicit: GA target, NGA limit, selectivity
-  target, safety feasibility, and optional process-time penalty.
+- Decision variables are exactly precursor dose, temperature, and integer cycle count.
+- Measured outcomes are GA thickness, NGA thickness, selectivity, and simulated
+  process time.
+- Objectives are explicit: maximize useful GA growth, minimize NGA growth, and
+  minimize process time. Selectivity is used as a constraint, not a sole objective.
+- Constraint thresholds are kept in YAML: minimum GA thickness, maximum NGA thickness,
+  and minimum selectivity.
+- Hard bounds cover precursor dose, temperature, integer cycle count, and optional
+  total process time.
+- The evaluation-only oracle enumerates the mixed-variable grid, reports feasible
+  regions, approximate Pareto front, approximate hypervolume, and whether a selective
+  window exists.
 - Existing scenarios remain loadable and unchanged.
+- Simulator-only plots are generated for GA, NGA, selectivity, and feasibility.
 
 Tests:
 - Stage 2 construction for all three existing scenarios.
 - Constraint values match existing `evaluate_objective` behavior.
 - Impossible scenario remains impossible under tested bounds.
+- Integer cycle validation, stable selectivity, zero-growth handling, safety bounds,
+  feasibility, oracle isolation, and scenario reproducibility.
 
 Explicit non-goals:
 - No multi-objective optimizer implementation.
 - No LLM integration.
 - No changes to default demo or benchmark CLI behavior.
+- No additional decision variables beyond precursor dose, temperature, and cycle count.
 
 ### BO-06: Stage 2 Constrained Multi-Objective BO
 

@@ -1,0 +1,66 @@
+scenario_id: bo_stage2_soft_selectivity_breakdown
+description: Stage 2 ASD problem where selectivity degrades smoothly at harsher conditions.
+process:
+  scenario: bo_stage2_soft_selectivity_breakdown
+  description: NGA growth turns on gradually at higher temperature and cycle counts.
+  seed: 4707
+  noise_sigma_nm: 0.02
+  per_cycle_overhead_s: 2.0
+  stabilization_time_s: 10.0
+  surfaces:
+    GA:
+      max_growth_per_cycle_nm: 0.105
+      precursor_tau_s: 0.9
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 3.0
+      inhibitor_sensitivity: 0.04
+      temperature_response_enabled: true
+      temperature_optimum_c: 180.0
+      temperature_width_c: 60.0
+      temperature_min_factor: 0.55
+    NGA:
+      max_growth_per_cycle_nm: 0.075
+      precursor_tau_s: 1.0
+      coreactant_tau_s: 1.2
+      nucleation_delay_cycles: 45.0
+      inhibitor_sensitivity: 0.04
+      temperature_response_enabled: true
+      temperature_optimum_c: 220.0
+      temperature_width_c: 40.0
+      temperature_min_factor: 0.25
+  safety:
+    precursor_dose_s: {min: 0.2, max: 8.0}
+    coreactant_dose_s: {min: 0.1, max: 8.0}
+    inhibitor_dose_s: {min: 0.0, max: 5.0}
+    temperature_c: {min: 120.0, max: 240.0}
+    cycles: {min: 30.0, max: 80.0}
+  objective:
+    ga_min_nm: 4.0
+    nga_max_nm: 0.60
+    selectivity_min: 0.75
+fixed_parameters:
+  coreactant_dose_s: 6.0
+  inhibitor_dose_s: 0.0
+hard_bounds:
+  precursor_dose_s: {min: 0.2, max: 8.0}
+  temperature_c: {min: 120.0, max: 240.0}
+  cycle_count: {min: 30.0, max: 80.0}
+  max_process_time_s: 1200.0
+constraints:
+  ga_min_nm: 4.0
+  nga_max_nm: 0.60
+  selectivity_min: 0.75
+objectives:
+  - maximize_ga
+  - minimize_nga
+  - minimize_process_time
+oracle_grid:
+  precursor_points: 13
+  temperature_points: 13
+  cycle_values: [40, 50, 60, 70, 80]
+metadata:
+  scientific_interpretation: Selectivity is not binary; it breaks down gradually under aggressive conditions.
+  hidden_process_parameters: NGA has a higher temperature optimum and a moderate nucleation delay.
+  noise: Gaussian measurement noise with sigma 0.02 nm.
+  feasible_window_exists: true
+  expected_difficulty: moderate

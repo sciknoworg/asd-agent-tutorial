@@ -1,0 +1,66 @@
+scenario_id: bo_stage2_model_misspecification
+description: Stage 2 ASD problem with offset temperature optima and misleading smooth trends.
+process:
+  scenario: bo_stage2_model_misspecification
+  description: A stress-test scenario for surrogates that assume simple monotonic behavior.
+  seed: 4808
+  noise_sigma_nm: 0.03
+  per_cycle_overhead_s: 2.0
+  stabilization_time_s: 10.0
+  surfaces:
+    GA:
+      max_growth_per_cycle_nm: 0.108
+      precursor_tau_s: 0.75
+      coreactant_tau_s: 1.0
+      nucleation_delay_cycles: 4.0
+      inhibitor_sensitivity: 0.05
+      temperature_response_enabled: true
+      temperature_optimum_c: 165.0
+      temperature_width_c: 28.0
+      temperature_min_factor: 0.35
+    NGA:
+      max_growth_per_cycle_nm: 0.082
+      precursor_tau_s: 1.8
+      coreactant_tau_s: 1.1
+      nucleation_delay_cycles: 48.0
+      inhibitor_sensitivity: 0.05
+      temperature_response_enabled: true
+      temperature_optimum_c: 205.0
+      temperature_width_c: 32.0
+      temperature_min_factor: 0.30
+  safety:
+    precursor_dose_s: {min: 0.2, max: 8.0}
+    coreactant_dose_s: {min: 0.1, max: 8.0}
+    inhibitor_dose_s: {min: 0.0, max: 5.0}
+    temperature_c: {min: 120.0, max: 230.0}
+    cycles: {min: 35.0, max: 80.0}
+  objective:
+    ga_min_nm: 4.2
+    nga_max_nm: 0.55
+    selectivity_min: 0.78
+fixed_parameters:
+  coreactant_dose_s: 6.0
+  inhibitor_dose_s: 0.0
+hard_bounds:
+  precursor_dose_s: {min: 0.2, max: 8.0}
+  temperature_c: {min: 120.0, max: 230.0}
+  cycle_count: {min: 35.0, max: 80.0}
+  max_process_time_s: 1200.0
+constraints:
+  ga_min_nm: 4.2
+  nga_max_nm: 0.55
+  selectivity_min: 0.78
+objectives:
+  - maximize_ga
+  - minimize_nga
+  - minimize_process_time
+oracle_grid:
+  precursor_points: 13
+  temperature_points: 13
+  cycle_values: [40, 50, 60, 70, 80]
+metadata:
+  scientific_interpretation: Offset optima make simple monotonic surrogate assumptions unreliable.
+  hidden_process_parameters: GA and NGA have separated temperature optima and different precursor taus.
+  noise: Gaussian measurement noise with sigma 0.03 nm.
+  feasible_window_exists: true
+  expected_difficulty: hard
