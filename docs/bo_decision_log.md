@@ -422,3 +422,99 @@ Rationale:
 Consequences:
 - `docs/stage2_scenarios.md` summarizes all Stage 2 scenarios.
 - The original three ASD scenario YAML files remain unchanged.
+
+## D-030 - Stage 2 MOBO Uses Transformed Outcome Coordinates
+
+Decision:
+- BO-06 models measured outcomes as GA thickness, negative NGA thickness, selectivity,
+  and negative process time.
+
+Rationale:
+- BoTorch's multi-objective acquisition functions use maximization conventions. Sign
+  transforms allow GA growth, NGA suppression, and process-time reduction to share one
+  objective direction without changing the measured simulator outputs.
+
+Consequences:
+- Proposal records and run records still expose measured GA, NGA, selectivity, and
+  process time.
+- Acquisition constraints convert the negative NGA coordinate back into the configured
+  maximum-NGA feasibility test.
+
+## D-031 - Cycle Count Is Enumerated, Not Rounded
+
+Decision:
+- Stage 2 MOBO enumerates permitted or configured cycle counts and optimizes
+  precursor dose and temperature conditional on each fixed integer count.
+
+Rationale:
+- Rounding an unconstrained continuous cycle suggestion can produce misleading
+  acquisition values and violates the task requirement for integer handling.
+
+Consequences:
+- Candidate cycle values default to the Stage 2 scenario grid and can be overridden in
+  `Stage2BOSettings`.
+- Candidate records always contain integer `Stage2Decision.cycle_count` values.
+
+## D-032 - Use Log-NEHVI When Available
+
+Decision:
+- BO-06 uses `qLogNoisyExpectedHypervolumeImprovement` in the installed BoTorch
+  0.18.1 runtime and falls back to `qNoisyExpectedHypervolumeImprovement` on older
+  releases.
+
+Rationale:
+- The task requested the current supported log-stabilized noisy hypervolume
+  acquisition where available.
+
+Consequences:
+- The optimizer remains portable across BoTorch releases while documenting the actual
+  acquisition used in the verified local environment.
+- On this Windows runtime, BoTorch fell back to a pure-Python log-EHVI path because
+  the fused C++ extension could not be compiled in the user profile directory.
+
+## D-033 - Reference Point Is Configurable and Threshold-Based
+
+Decision:
+- `Stage2BOSettings.reference_point` accepts an explicit three-objective reference
+  point. When omitted, BO-06 derives a conservative default from configured
+  feasibility thresholds and hard process-time bounds.
+
+Rationale:
+- The reference point should encode the scientific objective definition, not leak
+  favorable values from benchmark or oracle results.
+
+Consequences:
+- Tests and smoke runs do not query `Stage2EvaluationOracle` for acquisition setup.
+- Future benchmark profiles can set scenario-specific reference points without
+  changing the optimizer code.
+
+## D-034 - Random Fallback Means Hard-Safety-Feasible
+
+Decision:
+- BO-06's random fallback samples Sobol candidates that satisfy immutable hard
+  parameter and process-time safety bounds and avoid duplicates.
+
+Rationale:
+- Outcome feasibility is unknown until the virtual experiment is run. Calling a
+  fallback outcome-feasible before measurement would blur the optimizer/oracle
+  boundary.
+
+Consequences:
+- Proposal records use `fallback_used` and `constraint_violations` to make fallback
+  behavior explicit.
+- The docs describe fallback candidates as hard-safety-feasible, not guaranteed
+  selective-window solutions.
+
+## D-035 - Stage 2 MOBO Is Opt-In
+
+Decision:
+- BO-06 adds `asd_agent.bo.stage2_mobo` and a smoke script but does not import the
+  heavy BoTorch path from `asd_agent.bo.__init__`.
+
+Rationale:
+- Base tutorial users should not pay the PyTorch/BoTorch import cost unless they use
+  the MOBO stage.
+
+Consequences:
+- Existing simulator, baseline, LLM, and notebook imports remain unchanged.
+- Users import Stage 2 MOBO directly from `asd_agent.bo.stage2_mobo`.

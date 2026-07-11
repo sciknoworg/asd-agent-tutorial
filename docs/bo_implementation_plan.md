@@ -379,35 +379,63 @@ Explicit non-goals:
 ### BO-06: Stage 2 Constrained Multi-Objective BO
 
 Purpose:
-- Implement constrained BO for ASD Stage 2, balancing GA growth, NGA suppression,
-  selectivity, safety, and process time.
+- Implement constrained noisy multi-objective BO for ASD Stage 2, balancing useful GA
+  growth, NGA suppression, process time, configured feasibility constraints, and hard
+  safety bounds.
 
 Dependencies:
 - BO-01 and BO-05.
-- BoTorch after dependency compatibility is verified.
+- Optional BO-GP stack verified locally in prior stages: PyTorch, GPyTorch, and
+  BoTorch.
+- Stage 2 problem definitions, safety validation, measured outcomes, and
+  evaluation-only oracle from BO-05.
 
 Expected files:
-- `src/asd_agent/bo/constrained.py`
-- `src/asd_agent/bo/multi_objective.py`
-- `src/asd_agent/bo/asd_bo_agent.py`
-- `tests/test_bo_constrained.py`
-- `tests/test_bo_asd_agent.py`
+- `src/asd_agent/bo/stage2_mobo.py`
+- `tests/test_bo_stage2_mobo.py`
+- `scripts/run_stage2_mobo_smoke.py`
+- `docs/implementation/BO-06.md`
+- Updates to this roadmap and `docs/bo_decision_log.md`.
 
 Acceptance criteria:
-- BO proposes only safe `ExperimentCondition` values.
-- BO can run through existing `run_agent_loop` or a documented BO runner.
-- Final recommendations still refer only to tested experiment IDs.
-- Benchmark rows remain compatible with current summary fields.
+- The surrogate uses one GP per measured outcome with float64 tensors, normalized
+  inputs, standardized outputs, Matern kernels, known-noise or inferred-noise mode,
+  deterministic seeds, fit retries, and jitter escalation.
+- Acquisition uses BoTorch's log-stabilized noisy expected hypervolume improvement
+  where available, with qNEHVI fallback on older releases.
+- Acquisition includes outcome constraints for minimum GA, maximum NGA, and minimum
+  selectivity.
+- The reference point is configurable and defaults to a threshold-based scientific
+  value, not a value derived from benchmark results.
+- Cycle count is treated as an integer by enumerating configured or scenario cycle
+  values and optimizing continuous variables conditional on each fixed count.
+- Initial observations use seeded Sobol designs, and existing ASD ledger rows can be
+  converted into Stage 2 observations.
+- Candidate records include acquisition value, feasibility probability, posterior
+  summaries, training observation IDs, duplicate counts, fallback use, and wall time.
+- Runs record hypervolume by iteration, constraint violations, fallback logging, and
+  tested-row recommendations.
+- Small smoke optimization runs on inherent selectivity, narrow selective window, and
+  impossible selectivity.
 
 Tests:
-- Constraint feasibility calculations.
-- Candidate safety and no-duplicate behavior.
-- End-to-end smoke tests on solvable and impossible scenarios.
+- Finite acquisition values.
+- Safety bounds and integer cycle-count compliance.
+- Outcome-constraint sign conventions.
+- Candidate uniqueness and deterministic suggestions.
+- Optimizer state save/restore.
+- Model-fit fallback recording.
+- Reuse of existing ledger observations.
+- Oracle isolation from optimizer artifacts.
+- Smoke run across inherent selectivity, narrow selective window, and impossible
+  selectivity.
 
 Explicit non-goals:
 - No hidden LLM reasoning or live OpenAI calls.
 - No real-lab recommendation claims.
-- No changes to current random/grid/rule-based results except adding new methods.
+- No changes to current random/grid/rule-based results.
+- No Stage 2 benchmark statistics beyond the small smoke runner.
+- No hybrid LLM-BO behavior.
 
 ### BO-07: Stage 2 Benchmark and Analysis
 
