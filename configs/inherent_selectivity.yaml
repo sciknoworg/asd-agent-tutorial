@@ -1,0 +1,45 @@
+{
+  "scenario": "inherent_selectivity",
+  "description": "GA nucleates quickly while NGA has a long nucleation delay.",
+  "seed": 101,
+  "noise_sigma_nm": 0.02,
+  "per_cycle_overhead_s": 2.0,
+  "stabilization_time_s": 10.0,
+  "surfaces": {
+    "GA": {
+      "max_growth_per_cycle_nm": 0.11,
+      "precursor_tau_s": 1.0,
+      "coreactant_tau_s": 1.2,
+      "nucleation_delay_cycles": 2.0,
+      "inhibitor_sensitivity": 0.03,
+      "temperature_response_enabled": true,
+      "temperature_optimum_c": 180.0,
+      "temperature_width_c": 55.0,
+      "temperature_min_factor": 0.55
+    },
+    "NGA": {
+      "max_growth_per_cycle_nm": 0.08,
+      "precursor_tau_s": 1.3,
+      "coreactant_tau_s": 1.4,
+      "nucleation_delay_cycles": 70.0,
+      "inhibitor_sensitivity": 0.08,
+      "temperature_response_enabled": true,
+      "temperature_optimum_c": 180.0,
+      "temperature_width_c": 65.0,
+      "temperature_min_factor": 0.50
+    }
+  },
+  "safety": {
+    "precursor_dose_s": {"min": 0.1, "max": 8.0},
+    "coreactant_dose_s": {"min": 0.1, "max": 8.0},
+    "inhibitor_dose_s": {"min": 0.0, "max": 5.0},
+    "temperature_c": {"min": 100.0, "max": 250.0},
+    "cycles": {"min": 5.0, "max": 80.0}
+  },
+  "objective": {
+    "ga_min_nm": 5.0,
+    "nga_max_nm": 0.5,
+    "selectivity_min": 0.80
+  }
+}
+
