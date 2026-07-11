@@ -595,3 +595,76 @@ Consequences:
 - `bo_stage2_smoke_profile` is suitable for tests and notebooks.
 - `bo_stage2_pilot_profile` increases scenarios, repetitions, and budget modestly but
   remains a CPU-friendly exploratory profile.
+
+## D-041 - Hybrid Execution Uses Candidate IDs Only
+
+Decision:
+- BO-08's `run_virtual_experiment` tool accepts an immutable `candidate_id` and a
+  concise rationale. It does not accept arbitrary reactor conditions.
+
+Rationale:
+- The LLM may inspect, review, explain, and decide, but numerical experimental
+  conditions must be created by BO and validated before backend execution.
+
+Consequences:
+- Candidate IDs are stored in the hybrid orchestrator before execution.
+- Unknown or already executed candidate IDs are rejected.
+- Tests assert that raw dose, temperature, and cycle fields cannot be passed to
+  `run_virtual_experiment`.
+
+## D-042 - Soft Bounds Are Advisory Within Hard Bounds
+
+Decision:
+- The hybrid LLM can propose soft-bound changes only in `hybrid_intervention` mode,
+  and those soft bounds must remain inside immutable Stage 2 hard bounds.
+
+Rationale:
+- This allows scientific steering without weakening safety constraints.
+
+Consequences:
+- The original Stage 2 configuration remains unchanged.
+- Soft-bound changes narrow the optimizer-facing search copy only.
+
+## D-043 - Final Hybrid Success Requires Tested Feasibility
+
+Decision:
+- `finish_optimization` is accepted only when the referenced experiment ID exists in
+  the hybrid ledger and its measured outcomes satisfy configured constraints.
+
+Rationale:
+- This extends the repository's tested-final-condition rule to the hybrid LLM-BO
+  workflow.
+
+Consequences:
+- Untested and infeasible final recommendations raise validation errors.
+- Budget exhaustion can still return a best observed row, but not a successful final
+  recommendation.
+
+## D-044 - Literature Retrieval Is Optional And Local By Default
+
+Decision:
+- BO-08 implements `NullLiteratureProvider`, `MockLiteratureProvider`, and
+  `LocalLiteratureProvider`, with no mandatory live web retrieval.
+
+Rationale:
+- The tutorial should remain reproducible and runnable without network access or
+  credentials.
+
+Consequences:
+- Tests and notebooks use fake or local literature providers.
+- Future live retrieval can be added as an optional provider without changing the
+  hybrid state machine.
+
+## D-045 - Fake LLM Exercises The Hybrid State Machine
+
+Decision:
+- BO-08 includes a deterministic `FakeHybridLLM` that can inspect history, query
+  local literature, request BO, change soft bounds, execute candidate IDs, finish, or
+  declare no selective window.
+
+Rationale:
+- The hybrid orchestration needs test coverage without live OpenAI calls.
+
+Consequences:
+- `notebooks/07_hybrid_llm_bo_agent.ipynb` runs with the fake LLM by default.
+- Tests cover malformed-tool handling and state-transition safety.

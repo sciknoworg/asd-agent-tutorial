@@ -490,37 +490,60 @@ Explicit non-goals:
 ### BO-08: Hybrid LLM-BO Agent
 
 Purpose:
-- Combine LLM planning with BO candidate generation while preserving strict tool
-  calling, tested-final-condition validation, and concise rationales.
+- Combine LLM-style scientific planning with BO candidate generation while preserving
+  strict tool calling, tested-final-condition validation, concise rationales, and a
+  clear separation between LLM, BO, and backend responsibilities.
 
 Dependencies:
-- BO-06 or BO-07.
-- Existing `LLMOptimizationAgent` and strict tool schema patterns.
-- OpenAI credentials only when explicitly provided.
+- BO-06 Stage 2 constrained MOBO.
+- BO-07 Stage 2 benchmark/result conventions.
+- Existing strict tool schema patterns from the legacy LLM-only agent.
 
 Expected files:
 - `src/asd_agent/bo/hybrid_agent.py`
-- `src/asd_agent/bo/prompts.py`
-- Prompt artifacts under `prompts/`
-- `tests/test_bo_hybrid_schema.py`
 - `tests/test_bo_hybrid_agent.py`
+- `notebooks/07_hybrid_llm_bo_agent.ipynb`
+- `docs/implementation/BO-08.md`
+- Updates to this roadmap and `docs/bo_decision_log.md`
 
 Acceptance criteria:
-- Hybrid agent can run in no-API dry-run or mocked-LLM tests.
-- LLM output never directly recommends an untested experiment.
-- BO candidate recommendations remain inside safety bounds.
-- Prompt records store concise decision rationales only.
+- Hybrid agent can run in no-API fake-LLM mode.
+- State machine covers initialize, inspect history, request BO candidates, review
+  candidates, execute candidate, observe, continue, change soft bounds, finish, and
+  declare no selective window.
+- Strict tools include history inspection, BO execution, virtual experiment execution
+  by candidate ID, soft-bound changes, finish, no-window declaration, and literature
+  query.
+- LLM-facing context excludes oracle values and hidden simulator parameters.
+- `run_virtual_experiment` accepts immutable candidate IDs only, not arbitrary
+  numerical reactor settings.
+- Soft bounds are mutable only inside immutable hard bounds.
+- Final success recommendations must reference tested feasible experiments.
+- No-window declarations must cite existing evidence IDs.
+- Malformed tool calls do not mutate optimizer or experiment state.
+- Literature retrieval defaults to null/mock/local providers with no mandatory live
+  web access.
+- Modes are available for `bo_only`, `llm_only_legacy`, `hybrid_advisory`,
+  `hybrid_intervention`, `hybrid_explanation_only`, and `rule_based_bo`.
 
 Tests:
 - Strict schema validation.
-- Mocked LLM tool-call behavior.
+- Fake LLM tool-call behavior.
 - Untested-final-condition rejection.
+- Infeasible-final-condition rejection.
+- Candidate-ID execution bypass prevention.
+- Soft-bound validation.
+- Evidence-ID validation.
+- Oracle isolation.
+- Malformed-tool state safety.
+- Local literature provider behavior.
 - No-API deterministic fallback behavior.
 
 Explicit non-goals:
 - No live OpenAI calls in tests.
 - No hidden chain-of-thought storage.
-- No replacement of deterministic BO baselines.
+- No replacement of the legacy LLM-only comparator.
+- No mandatory live literature retrieval.
 
 ### BO-09: Research-Study Harness and Statistics
 
