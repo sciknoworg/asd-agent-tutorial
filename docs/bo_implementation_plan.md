@@ -271,36 +271,58 @@ Explicit non-goals:
 ### BO-04: Stage 1 Physics-Informed GP and Benchmark
 
 Purpose:
-- Add physics-informed surrogate options for Stage 1 and compare them against the
-  generic GP and grid search.
+- Add a physics-informed Stage 1 surrogate with a trainable saturating mean and a GP
+  residual.
+- Complete the Stage 1 comparison framework for fixed grid, generic GP, and
+  physics-informed GP.
 
 Dependencies:
 - BO-01 through BO-03.
 - Stage 1 process-model assumptions documented in BO-02.
+- Optional BO-GP dependencies verified in BO-03.
 
 Expected files:
-- `src/asd_agent/bo/physics_kernels.py`
 - `src/asd_agent/bo/physics_models.py`
+- `src/asd_agent/bo/study.py`
 - `tests/test_bo_physics_gp.py`
-- Benchmark outputs and plots for Stage 1 comparisons.
+- `configs/bo_stage1_smoke_profile.yaml`
+- `configs/bo_stage1_pilot_profile.yaml`
+- `scripts/run_stage1_study.py`
+- `notebooks/05_bayesian_active_learning_for_saturation.ipynb`
+- `docs/implementation/BO-04.md`
+- Updates to `src/asd_agent/bo/optimizers.py`, this roadmap, and the decision log.
 
 Acceptance criteria:
-- Physics-informed model exposes the same prediction/acquisition interface as the
-  generic GP path.
-- Benchmarks compare generic GP, physics-informed GP, grid search, and random search
-  with shared seeds and budgets.
-- Documentation explains what physical assumption is encoded and why it is still a
-  tutorial model.
+- The physics-informed model uses positive constrained trainable `g_inf` and `k`
+  parameters in a saturating mean, with a stationary residual GP for uncertainty.
+- The implementation is accurately described as a physics-informed GP, not a fully
+  Bayesian posterior over physical parameters.
+- Grid, generic GP, and physics-informed GP share initial observations, budgets,
+  candidate grid size, target definitions, stopping tolerances, noise streams, and
+  scenario instances through `Stage1RunnerSettings`.
+- Per-run summaries report success, experiments used, estimated and true t95,
+  absolute and relative t95 error, growth fraction, dose overshoot, false saturation,
+  cumulative dose, process time, uncertainty coverage, model-fit warning count,
+  failure category, and optimizer wall time.
+- Deterministic Stage 1 scripts produce posterior, t95, experiment-count,
+  cumulative-dose, calibration, and misspecification figures with source data beside
+  each figure.
+- A CPU-only notebook demonstrates the Stage 1 active-learning workflow.
 
 Tests:
-- Kernel/model parameter constraints.
-- Deterministic predictions for tiny fixtures.
-- Benchmark smoke test on a small repetition count.
+- Positive physical parameters.
+- Finite posterior predictions.
+- Compatibility with mono-exponential data.
+- Graceful behavior under model misspecification.
+- Fallback recording when the physics-informed fit fails.
+- Reproducible suggestions for fixed seeds.
+- Complete Stage 1 result schema.
 
 Explicit non-goals:
 - No claim of real HfO2/MoS2 predictive value.
 - No Stage 2 constrained multi-objective BO.
 - No production lab recommendations.
+- No paper-scale repeated experiments.
 
 ### BO-05: Stage 2 Problem Definition and Scenarios
 

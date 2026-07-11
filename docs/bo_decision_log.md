@@ -305,3 +305,60 @@ Consequences:
 - `Stage1RunnerSettings` records the shared budget, initial dose fractions or explicit
   doses, simulator seed, optimizer seed, and minimum observations before
   recommendation.
+
+## D-022 - Physics-Informed GP Uses a Trainable Saturating Mean
+
+Decision:
+- BO-04 implements the Stage 1 physics-informed surrogate as a GPyTorch exact GP with
+  a trainable saturating mean `g_inf * (1 - exp(-k * t))` and a Matérn residual GP.
+
+Rationale:
+- The tutorial needs an explicit physical inductive bias while preserving uncertainty
+  from residual model error.
+
+Consequences:
+- `g_inf` and `k` are positive constrained trainable parameters.
+- The implementation is a physics-informed GP with optimized physical parameters. It
+  is not described as a fully Bayesian posterior over those parameters.
+
+## D-023 - Custom Physics Model Uses Direct GPyTorch Training
+
+Decision:
+- The physics-informed model is fit with a short deterministic Adam loop over the
+  GPyTorch marginal log likelihood instead of BoTorch's generic fitting helper.
+
+Rationale:
+- The custom GPyTorch model does not expose BoTorch-specific model conveniences such
+  as `transform_inputs`.
+
+Consequences:
+- Fit retries and warnings are recorded by the BO wrapper.
+- Generic-GP fallback remains available when physics-informed fitting fails.
+
+## D-024 - BO-04 Adds a Virtual Endpoint Separate From Optimizer Visibility
+
+Decision:
+- Stage 1 study success is evaluated with a hidden virtual endpoint: a tested dose
+  must reach at least 95% of true finite saturation within a configurable dose
+  tolerance of the minimum true threshold dose.
+
+Rationale:
+- Optimizers should not see hidden truth, but the benchmark needs a stable evaluation
+  endpoint for fair comparison.
+
+Consequences:
+- Results record both the optimizer-visible recommendation and the evaluation-only
+  endpoint experiment ID when one exists.
+- Non-self-limited processes remain failure cases for this endpoint.
+
+## D-025 - Stage 1 Profiles Stay Tutorial-Scale
+
+Decision:
+- BO-04 adds smoke and pilot profiles only.
+
+Rationale:
+- The current task explicitly excludes paper-scale experiments.
+
+Consequences:
+- `bo_stage1_smoke_profile` uses one repetition and a small candidate grid.
+- `bo_stage1_pilot_profile` uses three repetitions and remains CPU-friendly.

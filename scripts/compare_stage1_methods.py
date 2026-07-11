@@ -35,7 +35,7 @@ def main() -> None:
         simulator_seed=5103,
         optimizer_seed=7103,
     )
-    results = compare_stage1_methods(configs, settings=settings)
+    results = compare_stage1_methods(configs, methods=("grid", "generic_gp"), settings=settings)
 
     json_path = Path(args.output_json)
     csv_path = Path(args.output_csv)

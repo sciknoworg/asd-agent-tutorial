@@ -121,6 +121,6 @@ def test_stage1_smoke_comparison_runs_required_scenarios() -> None:
 
     results = compare_stage1_methods(configs, settings=settings)
 
-    assert len(results) == 6
-    assert {result.method for result in results} == {"grid", "generic_gp"}
+    assert len(results) == 9
+    assert {result.method for result in results} == {"grid", "generic_gp", "physics_gp"}
     assert all(len(result.records) <= settings.budget for result in results)
