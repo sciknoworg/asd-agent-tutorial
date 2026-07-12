@@ -66,7 +66,7 @@ def run_method(
         run = random_search(config, budget=budget, seed=seed)
         return _persist_baseline(run, config, run_dir)
     if method == "grid_search":
-        run = grid_search(config, budget=max(budget, 81), seed=seed)
+        run = grid_search(config, budget=budget, seed=seed)
         return _persist_baseline(run, config, run_dir)
     if method == "rule_based":
         return run_agent_loop(

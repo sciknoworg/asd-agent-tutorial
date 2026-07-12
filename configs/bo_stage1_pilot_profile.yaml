@@ -18,5 +18,5 @@ initial_dose_fractions:
   - 0.2
 simulator_seed: 6204
 optimizer_seed: 7204
-endpoint_tolerance_s: 0.75
+endpoint_relative_tolerance: 0.10
 min_recommendation_observations: 3

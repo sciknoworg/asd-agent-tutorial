@@ -108,9 +108,7 @@ def saturation_threshold_growth(
     """Return the evaluation threshold for known-target or inferred-asymptote mode."""
 
     if config.objective.mode == "known_target":
-        if config.objective.target_growth is None:
-            return None
-        return config.objective.saturation_fraction * config.objective.target_growth
+        return config.objective.target_growth
     if saturation_value is None:
         return None
     return config.objective.saturation_fraction * saturation_value
@@ -196,6 +194,13 @@ def evaluate_recommendation(
             / report.true_saturation_value
         )
 
+    true_growth_at_recommendation = true_growth(config.process, recommendation.recommended_dose_s)
+    false_saturation = recommendation.declares_saturation and (
+        not report.has_meaningful_saturation_threshold
+        or report.saturation_threshold_growth is None
+        or true_growth_at_recommendation < report.saturation_threshold_growth
+    )
+
     return Stage1RecommendationMetrics(
         estimated_t95_s=estimated,
         true_t95_s=true_t95,
@@ -205,7 +210,5 @@ def evaluate_recommendation(
         dose_overshoot_s=dose_overshoot,
         cumulative_dose_s=sum(record.dose_s for record in records),
         cumulative_simulated_process_time_s=sum(record.process_time_s for record in records),
-        false_saturation_declaration=(
-            recommendation.declares_saturation and not report.has_meaningful_saturation_threshold
-        ),
+        false_saturation_declaration=false_saturation,
     )

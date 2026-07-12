@@ -27,7 +27,7 @@ class Stage2Decision(BaseModel):
     temperature_c: float
     cycle_count: int = Field(ge=0)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     def rounded_key(self) -> tuple[float, float, int]:
         """Return a stable duplicate-detection key."""
@@ -41,7 +41,7 @@ class Stage2FixedParameters(BaseModel):
     coreactant_dose_s: float = Field(gt=0.0)
     inhibitor_dose_s: float = Field(default=0.0, ge=0.0)
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
 
 class Stage2HardBounds(BaseModel):
@@ -52,7 +52,7 @@ class Stage2HardBounds(BaseModel):
     cycle_count: Range
     max_process_time_s: float | None = Field(default=None, gt=0.0)
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
 
 class Stage2Constraints(BaseModel):
@@ -62,7 +62,7 @@ class Stage2Constraints(BaseModel):
     nga_max_nm: float = Field(ge=0.0)
     selectivity_min: float = Field(ge=-1.0, le=1.0)
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
 
 class Stage2OracleGrid(BaseModel):
@@ -72,7 +72,7 @@ class Stage2OracleGrid(BaseModel):
     temperature_points: int = Field(default=17, ge=2)
     cycle_values: list[int] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     @model_validator(mode="after")
     def check_cycle_values(self) -> Stage2OracleGrid:
@@ -106,7 +106,7 @@ class Stage2Config(BaseModel):
     oracle_grid: Stage2OracleGrid = Field(default_factory=Stage2OracleGrid)
     metadata: Stage2ScenarioMetadata
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     @model_validator(mode="after")
     def check_objectives_and_bounds(self) -> Stage2Config:
@@ -126,6 +126,22 @@ class Stage2Config(BaseModel):
             raise ValueError("Stage 2 cycle lower bound outside simulator safety")
         if not process_safety.cycles.contains(float(self.hard_bounds.cycle_count.max)):
             raise ValueError("Stage 2 cycle upper bound outside simulator safety")
+        if (
+            not float(self.hard_bounds.cycle_count.min).is_integer()
+            or not float(self.hard_bounds.cycle_count.max).is_integer()
+        ):
+            raise ValueError("Stage 2 cycle-count bounds must be integers")
+        if not process_safety.coreactant_dose_s.contains(self.fixed_parameters.coreactant_dose_s):
+            raise ValueError("fixed coreactant dose outside simulator safety")
+        if not process_safety.inhibitor_dose_s.contains(self.fixed_parameters.inhibitor_dose_s):
+            raise ValueError("fixed inhibitor dose outside simulator safety")
+        invalid_oracle_cycles = [
+            value
+            for value in self.oracle_grid.cycle_values
+            if not self.hard_bounds.cycle_count.contains(float(value))
+        ]
+        if invalid_oracle_cycles:
+            raise ValueError(f"oracle cycle values outside hard bounds: {invalid_oracle_cycles}")
         return self
 
     def optimizer_view(self) -> dict[str, object]:
@@ -155,7 +171,7 @@ class Stage2Outcomes(BaseModel):
     selectivity: float
     process_time_s: float
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class Stage2ConstraintEvaluation(BaseModel):

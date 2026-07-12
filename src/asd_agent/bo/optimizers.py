@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from math import isfinite
+from pathlib import Path
 from time import perf_counter
 from typing import Literal
 from uuid import uuid4
@@ -35,7 +36,7 @@ from asd_agent.bo.physics_models import (
     PhysicsInformedGPSettings,
     fit_physics_informed_stage1_gp,
 )
-from asd_agent.bo.records import OptimizerState, utc_now
+from asd_agent.bo.records import OptimizerState, RunManifest, utc_now
 from asd_agent.bo.stage1 import (
     Stage1Config,
     Stage1ExperimentRecord,
@@ -153,7 +154,10 @@ class Stage1RunnerSettings(BaseModel):
     simulator_seed: int | None = None
     optimizer_seed: int = 0
     min_recommendation_observations: int = Field(default=3, ge=1)
-    endpoint_tolerance_s: float = Field(default=0.5, ge=0.0)
+    stopping_tolerance_s: float = Field(default=0.5, ge=0.0)
+    asymptote_stability_relative: float = Field(default=0.05, gt=0.0)
+    endpoint_relative_tolerance: float = Field(default=0.10, ge=0.0)
+    endpoint_tolerance_s: float | None = Field(default=None, ge=0.0)
     endpoint_saturation_fraction: float = Field(default=0.95, gt=0.0, lt=1.0)
 
     model_config = ConfigDict(extra="forbid")
@@ -177,6 +181,7 @@ class Stage1OptimizationResult(BaseModel):
     optimizer_wall_time_s: float = Field(ge=0.0)
     warnings: list[str] = Field(default_factory=list)
     optimizer_state: OptimizerState
+    manifest: RunManifest
     started_at: str = Field(default_factory=utc_now)
     finished_at: str = Field(default_factory=utc_now)
 
@@ -590,6 +595,9 @@ def run_stage1_optimization(
     config: Stage1Config,
     method: Stage1Method,
     settings: Stage1RunnerSettings | None = None,
+    *,
+    initial_records: Sequence[Stage1ExperimentRecord] = (),
+    optimizer_state: OptimizerState | None = None,
 ) -> Stage1OptimizationResult:
     """Run one Stage 1 optimizer with matched initial observations and budget."""
 
@@ -597,6 +605,16 @@ def run_stage1_optimization(
     started = utc_now()
     wall_start = perf_counter()
     lab = Stage1VirtualLab(config, seed=resolved_settings.simulator_seed)
+    manifest = RunManifest.create(
+        config_path=Path(__file__).resolve().parents[3] / "configs" / f"{config.scenario_id}.yaml",
+        method=method,
+        scenario=config.scenario_id,
+        experiment_budget=resolved_settings.budget,
+        named_seeds={"simulator": lab.seed, "optimizer": resolved_settings.optimizer_seed},
+        acquisition_function=("fixed_grid" if method == "grid" else "threshold_probability"),
+        model_settings=resolved_settings.model_dump(mode="json"),
+        started_at=started,
+    )
     optimizer: (
         Stage1FixedGridOptimizer | Stage1GenericGPOptimizer | Stage1PhysicsInformedGPOptimizer
     )
@@ -618,8 +636,14 @@ def run_stage1_optimization(
             resolved_settings.physics_gp,
             seed=resolved_settings.optimizer_seed,
         )
+    if optimizer_state is not None:
+        if optimizer_state.optimizer != optimizer.name:
+            raise ValueError(
+                f"optimizer state belongs to {optimizer_state.optimizer!r}, not {optimizer.name!r}"
+            )
+        optimizer.restore_state(optimizer_state)
 
-    records: list[Stage1ExperimentRecord] = []
+    records = [record.model_copy(deep=True) for record in initial_records]
     warnings: list[str] = []
     status: Stage1OptimizationStatus | None = None
 
@@ -639,16 +663,14 @@ def run_stage1_optimization(
         )
 
     while len(records) < resolved_settings.budget:
-        if primary_endpoint_record(config, records, resolved_settings) is not None:
-            status = "success"
-            break
-        current_recommendation = smallest_tested_recommendation(
+        visible_recommendation = optimizer_visible_recommendation(
             config,
             records,
-            min_observations=resolved_settings.min_recommendation_observations,
+            optimizer.proposals,
+            resolved_settings,
         )
-        if current_recommendation is not None and not endpoint_possible(config):
-            status = "no_saturation_detected"
+        if visible_recommendation is not None:
+            status = "success"
             break
 
         proposal_result = optimizer.propose(records)
@@ -664,36 +686,36 @@ def run_stage1_optimization(
             )
         )
 
-    endpoint = primary_endpoint_record(config, records, resolved_settings)
-    final_recommendation = smallest_tested_recommendation(
+    final_recommendation = optimizer_visible_recommendation(
         config,
         records,
-        min_observations=resolved_settings.min_recommendation_observations,
+        optimizer.proposals,
+        resolved_settings,
+        require_precision=False,
     )
-    if final_recommendation is None and endpoint is not None:
-        recommendation = Stage1Recommendation(
-            recommended_dose_s=endpoint.dose_s,
-            estimated_t95_s=endpoint.dose_s,
-            estimated_saturation_value=endpoint.observed_growth
-            / config.objective.saturation_fraction,
-            declares_saturation=True,
-        )
-        recommended_experiment_id = endpoint.experiment_id
-    elif final_recommendation is None:
+    if final_recommendation is None:
         recommendation = None
         recommended_experiment_id = None
     else:
         recommendation, recommended_experiment_id = final_recommendation
 
+    endpoint = primary_endpoint_record(
+        config,
+        records,
+        resolved_settings,
+        recommended_experiment_id=recommended_experiment_id,
+    )
+
     if recommendation is None:
         metrics = None
-        status = status or (
-            "no_saturation_detected" if not endpoint_possible(config) else "budget_exhausted"
-        )
+        status = status or "budget_exhausted"
     else:
         oracle_report = Stage1EvaluationOracle(config).evaluate()
         metrics = evaluate_recommendation(config, recommendation, records, oracle_report)
-        status = status or ("success" if endpoint is not None else "budget_exhausted")
+        if status is None:
+            status = "success" if endpoint is not None else "budget_exhausted"
+        elif status == "success" and endpoint is None:
+            status = "budget_exhausted"
 
     optimizer_warnings = (
         optimizer.warnings
@@ -701,6 +723,10 @@ def run_stage1_optimization(
         else []
     )
     failure_category = status
+    finished = utc_now()
+    saved_state = optimizer.get_state().model_copy(
+        update={"observation_ids": [record.experiment_id for record in records]}
+    )
     return Stage1OptimizationResult(
         method=method,
         scenario_id=config.scenario_id,
@@ -716,9 +742,10 @@ def run_stage1_optimization(
         failure_category=failure_category,
         optimizer_wall_time_s=perf_counter() - wall_start,
         warnings=warnings + optimizer_warnings,
-        optimizer_state=optimizer.get_state(),
+        optimizer_state=saved_state,
+        manifest=manifest.mark_finished(finished),
         started_at=started,
-        finished_at=utc_now(),
+        finished_at=finished,
     )
 
 
@@ -785,16 +812,80 @@ def posterior_summary(decision: ThresholdDecision) -> dict[str, float]:
     return summary
 
 
-def endpoint_possible(config: Stage1Config) -> bool:
-    """Return whether the process has a finite true saturation endpoint."""
+def optimizer_visible_recommendation(
+    config: Stage1Config,
+    records: Sequence[Stage1ExperimentRecord],
+    proposals: Sequence[Stage1CandidateProposal],
+    settings: Stage1RunnerSettings,
+    *,
+    require_precision: bool = True,
+) -> tuple[Stage1Recommendation, str] | None:
+    """Return a tested recommendation using optimizer-visible evidence only."""
 
-    return Stage1EvaluationOracle(config).evaluate().true_saturation_value is not None
+    if len(records) < settings.min_recommendation_observations:
+        return None
+    target = latest_visible_target(config, records, proposals)
+    if target is None:
+        return None
+    if config.objective.mode == "inferred_asymptote" and not asymptote_is_stable(
+        records, settings.asymptote_stability_relative
+    ):
+        return None
+    recommendation = smallest_tested_recommendation(
+        config,
+        records,
+        target_growth=target,
+        min_observations=settings.min_recommendation_observations,
+    )
+    if recommendation is None or not require_precision:
+        return recommendation
+    chosen, _experiment_id = recommendation
+    lower_doses = [
+        record.dose_s
+        for record in records
+        if record.dose_s < chosen.recommended_dose_s and record.observed_growth < target
+    ]
+    if not lower_doses:
+        return None
+    if chosen.recommended_dose_s - max(lower_doses) > settings.stopping_tolerance_s:
+        return None
+    return recommendation
+
+
+def latest_visible_target(
+    config: Stage1Config,
+    records: Sequence[Stage1ExperimentRecord],
+    proposals: Sequence[Stage1CandidateProposal],
+) -> float | None:
+    """Return the latest finite target estimate saved by an optimizer proposal."""
+
+    for proposal in reversed(proposals):
+        value = proposal.posterior_summaries.get("target_growth")
+        if value is not None and isfinite(value) and value > 0.0:
+            return value
+    return estimate_stage1_target_growth(config, records)
+
+
+def asymptote_is_stable(
+    records: Sequence[Stage1ExperimentRecord],
+    relative_tolerance: float,
+) -> bool:
+    """Detect a visible high-dose plateau without consulting hidden process values."""
+
+    highest_dose_records = sorted(records, key=lambda record: record.dose_s)[-3:]
+    if len(highest_dose_records) < 3:
+        return False
+    values = [record.observed_growth for record in highest_dose_records]
+    scale = max(max(values), 1e-12)
+    return (max(values) - min(values)) / scale <= relative_tolerance
 
 
 def primary_endpoint_record(
     config: Stage1Config,
     records: Sequence[Stage1ExperimentRecord],
     settings: Stage1RunnerSettings,
+    *,
+    recommended_experiment_id: str | None = None,
 ) -> Stage1ExperimentRecord | None:
     """Return the smallest tested record meeting the BO-04 virtual endpoint."""
 
@@ -805,11 +896,17 @@ def primary_endpoint_record(
     if true_t95 is None:
         return None
     threshold = settings.endpoint_saturation_fraction * report.true_saturation_value
+    dose_tolerance = (
+        settings.endpoint_tolerance_s
+        if settings.endpoint_tolerance_s is not None
+        else true_t95 * settings.endpoint_relative_tolerance
+    )
     eligible = [
         record
         for record in records
+        if recommended_experiment_id is None or record.experiment_id == recommended_experiment_id
         if true_growth(config.process, record.dose_s) >= threshold
-        and record.dose_s <= true_t95 + settings.endpoint_tolerance_s
+        and record.dose_s <= true_t95 + dose_tolerance
     ]
     if not eligible:
         return None

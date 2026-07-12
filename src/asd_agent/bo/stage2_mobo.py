@@ -29,7 +29,7 @@ from gpytorch.mlls import SumMarginalLogLikelihood
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from torch.quasirandom import SobolEngine
 
-from asd_agent.bo.records import OptimizerState, utc_now
+from asd_agent.bo.records import OptimizerState, RunManifest, utc_now
 from asd_agent.bo.stage2 import (
     Stage2Config,
     Stage2ConstraintEvaluation,
@@ -116,6 +116,10 @@ class Stage2BOSettings(BaseModel):
     def check_reference_point(self) -> Stage2BOSettings:
         if self.reference_point is not None and len(self.reference_point) != 3:
             raise ValueError("reference_point must contain three objective-space values")
+        if self.reference_point is not None and not all(
+            math.isfinite(value) for value in self.reference_point
+        ):
+            raise ValueError("reference_point values must be finite")
         return self
 
 
@@ -248,6 +252,7 @@ class Stage2BOResult(BaseModel):
     optimizer_wall_time_s: float = Field(ge=0.0)
     warnings: list[str] = Field(default_factory=list)
     optimizer_state: OptimizerState
+    manifest: RunManifest
     started_at: str = Field(default_factory=utc_now)
     finished_at: str = Field(default_factory=utc_now)
 
@@ -311,6 +316,12 @@ class Stage2Surrogate:
         for index, name in enumerate(MODEL_OUTCOME_NAMES):
             summary[f"{name}_mean"] = float(mean[index])
             summary[f"{name}_stddev"] = float(stddev[index])
+        ga_mean = max(float(mean[0]), 0.0)
+        nga_mean = max(-float(mean[1]), 0.0)
+        total_mean = ga_mean + nga_mean
+        derived_selectivity = 0.0 if total_mean <= 1e-12 else (ga_mean - nga_mean) / total_mean
+        summary["selectivity_from_thickness_means"] = derived_selectivity
+        summary["selectivity_consistency_error"] = abs(float(mean[2]) - derived_selectivity)
         feasibility = feasibility_probability(
             config,
             [float(value) for value in mean.tolist()],
@@ -683,6 +694,7 @@ def run_stage2_bo(
     simulator_seed: int | None = None,
     optimizer_seed: int | None = None,
     initial_observations: Sequence[Stage2Observation] = (),
+    optimizer_state: OptimizerState | None = None,
 ) -> Stage2BOResult:
     """Run one constrained Stage 2 MOBO loop on a virtual ASD scenario."""
 
@@ -690,8 +702,27 @@ def run_stage2_bo(
     started_at = utc_now()
     wall_start = perf_counter()
     observations = list(initial_observations)
+    resolved_simulator_seed = config.process.seed if simulator_seed is None else simulator_seed
+    resolved_optimizer_seed = 0 if optimizer_seed is None else optimizer_seed
+    manifest = RunManifest.create(
+        config_path=Path(__file__).resolve().parents[3] / "configs" / f"{config.scenario_id}.yaml",
+        method="stage2_mobo",
+        scenario=config.scenario_id,
+        experiment_budget=resolved_settings.experiment_budget,
+        named_seeds={
+            "simulator": resolved_simulator_seed,
+            "measurement_noise": resolved_simulator_seed,
+            "optimizer": resolved_optimizer_seed,
+        },
+        acquisition_function=ACQUISITION_NAME,
+        model_settings=resolved_settings.model_dump(mode="json"),
+        started_at=started_at,
+    )
     warnings: list[str] = []
-    hypervolume_by_iteration: list[float] = []
+    hypervolume_by_iteration = [
+        observed_hypervolume(config, observations[: index + 1], resolved_settings)
+        for index in range(len(observations))
+    ]
 
     initial_decisions = sobol_initial_decisions(
         config,
@@ -724,6 +755,12 @@ def run_stage2_bo(
         resolved_settings,
         seed=optimizer_seed,
     )
+    if optimizer_state is not None:
+        if optimizer_state.optimizer != optimizer.name:
+            raise ValueError(
+                f"optimizer state belongs to {optimizer_state.optimizer!r}, not {optimizer.name!r}"
+            )
+        optimizer.restore_state(optimizer_state)
     status: Stage2BORunStatus | None = None
     while len(observations) < resolved_settings.experiment_budget:
         proposal_result = optimizer.propose(observations)
@@ -750,6 +787,10 @@ def run_stage2_bo(
     if status == "budget_exhausted" and not observations:
         status = "no_feasible_candidate"
 
+    finished_at = utc_now()
+    saved_state = optimizer.get_state().model_copy(
+        update={"observation_ids": [observation.experiment_id for observation in observations]}
+    )
     return Stage2BOResult(
         scenario_id=config.scenario_id,
         status=status,
@@ -760,9 +801,10 @@ def run_stage2_bo(
         failure_category=status,
         optimizer_wall_time_s=perf_counter() - wall_start,
         warnings=warnings + optimizer.warnings,
-        optimizer_state=optimizer.get_state(),
+        optimizer_state=saved_state,
+        manifest=manifest.mark_finished(finished_at),
         started_at=started_at,
-        finished_at=utc_now(),
+        finished_at=finished_at,
     )
 
 
@@ -883,7 +925,15 @@ def stage2_reference_point(config: Stage2Config, settings: Stage2BOSettings) -> 
     """Return the configured scientific reference point in objective coordinates."""
 
     if settings.reference_point is not None:
-        return [float(value) for value in settings.reference_point]
+        configured = [float(value) for value in settings.reference_point]
+        if configured[0] > config.constraints.ga_min_nm:
+            raise ValueError("reference GA value must not exceed the feasible GA threshold")
+        if configured[1] > -config.constraints.nga_max_nm:
+            raise ValueError("reference negative-NGA value must be no better than feasibility")
+        max_time = config.hard_bounds.max_process_time_s
+        if max_time is not None and configured[2] > -max_time:
+            raise ValueError("reference negative-time value must be no better than the hard limit")
+        return configured
     max_time = config.hard_bounds.max_process_time_s
     if max_time is None:
         max_time = stage2_process_time(

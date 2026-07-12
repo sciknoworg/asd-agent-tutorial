@@ -40,7 +40,8 @@ class Stage1StudyProfile(BaseModel):
     initial_dose_fractions: list[float] = Field(default_factory=lambda: [0.0, 0.2])
     simulator_seed: int = 6104
     optimizer_seed: int = 7104
-    endpoint_tolerance_s: float = Field(default=0.5, ge=0.0)
+    endpoint_relative_tolerance: float = Field(default=0.10, ge=0.0)
+    endpoint_tolerance_s: float | None = Field(default=None, ge=0.0)
     min_recommendation_observations: int = Field(default=3, ge=1)
 
     model_config = ConfigDict(extra="forbid")
@@ -57,6 +58,7 @@ class Stage1StudyProfile(BaseModel):
             physics_gp=Stage1PhysicsGPSettings(acquisition=acquisition),
             simulator_seed=self.simulator_seed + repetition,
             optimizer_seed=self.optimizer_seed + repetition,
+            endpoint_relative_tolerance=self.endpoint_relative_tolerance,
             endpoint_tolerance_s=self.endpoint_tolerance_s,
             min_recommendation_observations=self.min_recommendation_observations,
         )

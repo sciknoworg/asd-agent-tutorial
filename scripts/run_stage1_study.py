@@ -6,6 +6,7 @@ import argparse
 import csv
 import sys
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -137,6 +138,9 @@ def main() -> None:
                 }
             )
     make_posterior_plot(plt, posterior_rows, output_dir / "sequential_posterior")
+    make_experiment_trajectory_plot(plt, results, output_dir / "experiment_trajectory")
+    make_saturation_samples_plot(plt, results, output_dir / "saturation_with_samples")
+    write_failure_rate_table(results, output_dir / "failure_rates.csv")
 
     print(f"Wrote BO-04 Stage 1 outputs to {output_dir}")
 
@@ -186,6 +190,8 @@ def make_bar_plot(
     axis.tick_params(axis="x", labelrotation=45)
     figure.tight_layout()
     figure.savefig(output_base.with_suffix(".png"), dpi=150)
+    figure.savefig(output_base.with_suffix(".svg"))
+    figure.savefig(output_base.with_suffix(".pdf"))
     plt.close(figure)
 
 
@@ -218,6 +224,8 @@ def make_scatter_plot(
     axis.set_title(title)
     figure.tight_layout()
     figure.savefig(output_base.with_suffix(".png"), dpi=150)
+    figure.savefig(output_base.with_suffix(".svg"))
+    figure.savefig(output_base.with_suffix(".pdf"))
     plt.close(figure)
 
 
@@ -258,7 +266,139 @@ def make_posterior_plot(
     axis.legend()
     figure.tight_layout()
     figure.savefig(output_base.with_suffix(".png"), dpi=150)
+    figure.savefig(output_base.with_suffix(".svg"))
+    figure.savefig(output_base.with_suffix(".pdf"))
     plt.close(figure)
+
+
+def make_experiment_trajectory_plot(
+    plt: object,
+    results: list[Any],
+    output_base: Path,
+) -> None:
+    """Plot sequential dose choices and export the observation-level source data."""
+
+    rows = [
+        {
+            "scenario_id": result.scenario_id,
+            "method": result.method,
+            "iteration": index,
+            "experiment_id": record.experiment_id,
+            "dose_s": record.dose_s,
+            "observed_growth": record.observed_growth,
+        }
+        for result in results
+        for index, record in enumerate(result.records, start=1)
+    ]
+    write_csv(output_base.with_suffix(".csv"), rows)
+    figure, axis = plt.subplots(figsize=(8, 4.5))
+    for key in sorted({f"{row['scenario_id']} | {row['method']}" for row in rows}):
+        selected = [row for row in rows if f"{row['scenario_id']} | {row['method']}" == key]
+        axis.plot(
+            [int(row["iteration"]) for row in selected],
+            [float(row["dose_s"]) for row in selected],
+            marker="o",
+            linewidth=1.0,
+            label=key,
+        )
+    axis.set_xlabel("Experiment")
+    axis.set_ylabel("Precursor dose (s)")
+    axis.set_title("Stage 1 experiment trajectories")
+    if rows:
+        axis.legend(fontsize=7, loc="best")
+    figure.tight_layout()
+    figure.savefig(output_base.with_suffix(".png"), dpi=150)
+    figure.savefig(output_base.with_suffix(".svg"))
+    figure.savefig(output_base.with_suffix(".pdf"))
+    plt.close(figure)
+
+
+def make_saturation_samples_plot(
+    plt: object,
+    results: list[Any],
+    output_base: Path,
+) -> None:
+    """Plot the first scenario's true curve and sequential sampled observations."""
+
+    from asd_agent.bo.oracle import Stage1EvaluationOracle
+    from asd_agent.config import load_stage1_scenario
+
+    if not results:
+        write_csv(output_base.with_suffix(".csv"), [])
+        return
+    scenario_id = str(results[0].scenario_id)
+    config = load_stage1_scenario(scenario_id.removeprefix("bo_stage1_"))
+    report = Stage1EvaluationOracle(config).evaluate(curve_points=200)
+    rows: list[dict[str, object]] = [
+        {
+            "scenario_id": scenario_id,
+            "method": "oracle_curve",
+            "kind": "true_curve",
+            "iteration": "",
+            "dose_s": point.dose_s,
+            "growth": point.true_growth,
+        }
+        for point in report.dense_curve
+    ]
+    selected_results = [result for result in results if result.scenario_id == scenario_id]
+    rows.extend(
+        {
+            "scenario_id": scenario_id,
+            "method": result.method,
+            "kind": "observation",
+            "iteration": index,
+            "dose_s": record.dose_s,
+            "growth": record.observed_growth,
+        }
+        for result in selected_results
+        for index, record in enumerate(result.records, start=1)
+    )
+    write_csv(output_base.with_suffix(".csv"), rows)
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    curve_rows = [row for row in rows if row["kind"] == "true_curve"]
+    axis.plot(
+        [float(row["dose_s"]) for row in curve_rows],
+        [float(row["growth"]) for row in curve_rows],
+        color="#222222",
+        label="true virtual process",
+    )
+    for method in sorted({str(row["method"]) for row in rows if row["kind"] == "observation"}):
+        method_rows = [
+            row for row in rows if row["kind"] == "observation" and row["method"] == method
+        ]
+        axis.scatter(
+            [float(row["dose_s"]) for row in method_rows],
+            [float(row["growth"]) for row in method_rows],
+            label=method,
+        )
+    axis.set_xlabel("Precursor dose (s)")
+    axis.set_ylabel("Growth (arbitrary units)")
+    axis.set_title(f"Saturation samples: {scenario_id}")
+    axis.legend(loc="best")
+    figure.tight_layout()
+    figure.savefig(output_base.with_suffix(".png"), dpi=150)
+    figure.savefig(output_base.with_suffix(".svg"))
+    figure.savefig(output_base.with_suffix(".pdf"))
+    plt.close(figure)
+
+
+def write_failure_rate_table(results: list[Any], path: Path) -> None:
+    """Export method/scenario failure counts and rates."""
+
+    grouped: dict[tuple[str, str], list[Any]] = {}
+    for result in results:
+        grouped.setdefault((str(result.scenario_id), str(result.method)), []).append(result)
+    rows = [
+        {
+            "scenario_id": scenario_id,
+            "method": method,
+            "runs": len(group),
+            "failures": sum(result.status != "success" for result in group),
+            "failure_rate": sum(result.status != "success" for result in group) / len(group),
+        }
+        for (scenario_id, method), group in sorted(grouped.items())
+    ]
+    write_csv(path, rows)
 
 
 def numeric(value: object) -> float | None:

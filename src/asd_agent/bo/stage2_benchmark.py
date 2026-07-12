@@ -13,6 +13,7 @@ from typing import Any, Literal
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
+from asd_agent.bo.records import RunManifest, utc_now
 from asd_agent.bo.stage2 import (
     Stage2Config,
     Stage2Decision,
@@ -57,6 +58,7 @@ class Stage2BenchmarkProfile(BaseModel):
     budget: int = Field(default=4, ge=1)
     initial_design_size: int = Field(default=2, ge=0)
     simulator_seed: int = 7207
+    initialization_seed: int | None = None
     optimizer_seed: int = 8207
     grid_precursor_points: int = Field(default=3, ge=2)
     grid_temperature_points: int = Field(default=3, ge=2)
@@ -101,13 +103,19 @@ class Stage2BenchmarkResult(BaseModel):
     hypervolume_regret: float
     experiments_to_first_feasible: int | None = None
     constraint_violation_count: int
+    unsafe_proposal_count: int
+    duplicate_proposal_count: int
     boundary_proposal_count: int
+    boundary_proposal_fraction: float
+    fallback_use_count: int
+    model_fit_failure_count: int
     failure_category: str
     recommended_experiment_id: str | None = None
     optimizer_wall_time_s: float = Field(ge=0.0)
     simulator_seed: int
     optimizer_seed: int
     warnings: list[str] = Field(default_factory=list)
+    manifest: RunManifest
 
     model_config = ConfigDict(extra="forbid")
 
@@ -129,7 +137,12 @@ class Stage2BenchmarkResult(BaseModel):
             "hypervolume_auc": self.hypervolume_auc,
             "hypervolume_regret": self.hypervolume_regret,
             "constraint_violation_count": self.constraint_violation_count,
+            "unsafe_proposal_count": self.unsafe_proposal_count,
+            "duplicate_proposal_count": self.duplicate_proposal_count,
             "boundary_proposal_count": self.boundary_proposal_count,
+            "boundary_proposal_fraction": self.boundary_proposal_fraction,
+            "fallback_use_count": self.fallback_use_count,
+            "model_fit_failure_count": self.model_fit_failure_count,
             "best_selectivity": best.outcomes.selectivity if best else 0.0,
             "ga_thickness_nm": best.outcomes.ga_thickness_nm if best else 0.0,
             "nga_thickness_nm": best.outcomes.nga_thickness_nm if best else 0.0,
@@ -241,7 +254,12 @@ def matched_initial_observations(
     decisions = sobol_initial_decisions(
         config,
         min(profile.initial_design_size, profile.budget),
-        seed=profile.optimizer_seed + repetition,
+        seed=(
+            profile.optimizer_seed
+            if profile.initialization_seed is None
+            else profile.initialization_seed
+        )
+        + repetition,
         cycle_values=candidate_cycle_values(config, settings),
     )
     return [
@@ -435,6 +453,29 @@ def build_stage2_benchmark_result(
     else:
         failure_category = status
     best = best_stage2_observation(observation_list)
+    finished = utc_now()
+    manifest = RunManifest.create(
+        config_path=Path(__file__).resolve().parents[3] / "configs" / f"{config.scenario_id}.yaml",
+        method=method,
+        scenario=config.scenario_id,
+        experiment_budget=profile.budget,
+        named_seeds={
+            "simulator": simulator_seed,
+            "initialization": (
+                optimizer_seed
+                if profile.initialization_seed is None
+                else profile.initialization_seed + repetition
+            ),
+            "optimizer": optimizer_seed,
+        },
+        acquisition_function="qLogNEHVI" if method == "stage2_mobo" else method,
+        model_settings=profile.model_dump(mode="json"),
+    ).mark_finished(finished)
+    boundary_count = sum(
+        1
+        for observation in observation_list
+        if is_boundary_decision(config, observation.decision, profile.boundary_tolerance_fraction)
+    )
     return Stage2BenchmarkResult(
         method=method,
         scenario_id=config.scenario_id,
@@ -453,19 +494,23 @@ def build_stage2_benchmark_result(
             for observation in observation_list
             if not observation.constraint_evaluation.feasible
         ),
-        boundary_proposal_count=sum(
-            1
-            for observation in observation_list
-            if is_boundary_decision(
-                config, observation.decision, profile.boundary_tolerance_fraction
-            )
+        unsafe_proposal_count=sum(
+            bool(validate_stage2_decision(config, proposal.decision)) for proposal in proposals
         ),
+        duplicate_proposal_count=sum(proposal.duplicate_proposals for proposal in proposals),
+        boundary_proposal_count=boundary_count,
+        boundary_proposal_fraction=(
+            boundary_count / len(observation_list) if observation_list else 0.0
+        ),
+        fallback_use_count=sum(proposal.fallback_used is not None for proposal in proposals),
+        model_fit_failure_count=sum("fit failed" in warning.lower() for warning in warnings),
         failure_category=failure_category,
         recommended_experiment_id=best.experiment_id if best else None,
         optimizer_wall_time_s=optimizer_wall_time_s,
         simulator_seed=simulator_seed,
         optimizer_seed=optimizer_seed,
         warnings=list(warnings),
+        manifest=manifest,
     )
 
 

@@ -64,6 +64,10 @@ def test_manual_lab_exports_pending_plan_and_template(tmp_path: Path) -> None:
     assert "manual_001" in template_csv.read_text(encoding="utf-8")
     assert lab.optimizer_view()["pending_experiment_ids"] == ["manual_001"]
 
+    restored = ManualLabBackend.from_plan_json(lab.config, plan_json)
+    assert restored.run_id == lab.run_id
+    assert restored.plans["manual_001"].status == "pending"
+
 
 def test_manual_lab_rejects_out_of_bounds_candidate() -> None:
     lab = backend()

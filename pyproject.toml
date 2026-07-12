@@ -7,7 +7,7 @@ name = "asd-agent-tutorial"
 version = "0.1.0"
 description = "Educational AI-agent loop for area-selective deposition in a virtual laboratory."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12,<3.15"
 license = { text = "MIT" }
 authors = [{ name = "ASD Agent Tutorial Contributors" }]
 keywords = ["atomic-layer-deposition", "area-selective-deposition", "agents", "optimization", "tutorial"]
@@ -15,6 +15,8 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Education",
   "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering",
 ]
@@ -43,6 +45,7 @@ notebooks = ["jupyterlab>=4.0", "nbformat>=5.10"]
 dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.10", "types-PyYAML>=6.0"]
 
 [project.scripts]
+asd-agent = "asd_agent.cli:main"
 asd-demo = "asd_agent.demo:main"
 asd-benchmark = "asd_agent.benchmark:main"
 
@@ -55,14 +58,14 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py312"
 src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.12"
 strict = true
 mypy_path = "src"
 packages = ["asd_agent"]

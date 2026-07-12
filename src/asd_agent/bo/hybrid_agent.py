@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from asd_agent.bo.records import utc_now
+from asd_agent.bo.records import RunManifest, utc_now
 from asd_agent.bo.stage2 import (
     Stage2Config,
     Stage2Decision,
@@ -19,13 +21,16 @@ from asd_agent.bo.stage2 import (
 from asd_agent.bo.stage2_mobo import (
     Stage2BOSettings,
     Stage2CandidateProposal,
+    Stage2ConstrainedMOBOOptimizer,
     Stage2Observation,
     best_stage2_observation,
     candidate_cycle_values,
     observe_stage2_decision,
     run_stage2_bo,
 )
-from asd_agent.heuristic_agent import candidate_plan
+from asd_agent.bo.stage2_oracle import Stage2EvaluationOracle
+from asd_agent.experiment_loop import OptimizationAgent, run_agent_loop
+from asd_agent.heuristic_agent import RuleBasedAgent
 from asd_agent.models import Range, sentence_count
 
 HybridState = Literal[
@@ -136,15 +141,39 @@ class LocalLiteratureProvider:
         if not path.exists():
             return []
         if path.is_file():
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                payload = payload.get("literature", [])
-            if not isinstance(payload, list):
-                raise ValueError("local literature JSON must contain a list")
-            return [LiteratureHit.model_validate(item) for item in payload]
+            suffix = path.suffix.lower()
+            if suffix == ".json":
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict):
+                    payload = payload.get("literature", [])
+                if not isinstance(payload, list):
+                    raise ValueError("local literature JSON must contain a list")
+                return [LiteratureHit.model_validate(item) for item in payload]
+            if suffix == ".jsonl":
+                return [
+                    LiteratureHit.model_validate(json.loads(line))
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+            if suffix == ".csv":
+                with path.open("r", newline="", encoding="utf-8") as handle:
+                    return [LiteratureHit.model_validate(row) for row in csv.DictReader(handle)]
+            if suffix in {".md", ".markdown"}:
+                text = path.read_text(encoding="utf-8").strip()
+                title = next(
+                    (
+                        line.lstrip("# ").strip()
+                        for line in text.splitlines()
+                        if line.startswith("#")
+                    ),
+                    path.stem,
+                )
+                return [LiteratureHit(source_id=path.name, title=title, summary=text[:2000])]
+            raise ValueError("local literature files must be JSON, JSONL, CSV, or Markdown")
         hits: list[LiteratureHit] = []
-        for item in sorted(path.glob("*.json")):
-            hits.extend(LocalLiteratureProvider._load_hits(item))
+        for suffix in ("*.json", "*.jsonl", "*.csv", "*.md", "*.markdown"):
+            for item in sorted(path.glob(suffix)):
+                hits.extend(LocalLiteratureProvider._load_hits(item))
         return hits
 
 
@@ -164,6 +193,8 @@ class SoftBoundsChange(BaseModel):
     precursor_dose_s: Range | None = None
     temperature_c: Range | None = None
     cycle_values: list[int] | None = None
+    evidence_experiment_ids: list[str] = Field(default_factory=list)
+    duration_steps: int = Field(default=1, ge=1)
     rationale: str = Field(min_length=1, max_length=700)
 
     model_config = ConfigDict(extra="forbid")
@@ -319,9 +350,47 @@ class HybridRunResult(BaseModel):
     soft_bounds: Stage2SoftBounds
     final_experiment_id: str | None = None
     evidence_experiment_ids: list[str] = Field(default_factory=list)
+    no_window_oracle_correct: bool | None = None
     events: list[HybridStateEvent] = Field(default_factory=list)
     literature: list[LiteratureHit] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    manifest: RunManifest | None = None
+    llm_calls: int = 0
+    token_usage: dict[str, int] = Field(default_factory=dict)
+    tool_call_counts: dict[str, int] = Field(default_factory=dict)
+    accepted_bo_proposals: int = 0
+    rejected_bo_proposals: int = 0
+    bound_change_count: int = 0
+    tool_validation_failures: int = 0
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def derive_event_metrics(self) -> HybridRunResult:
+        counts: dict[str, int] = {}
+        for event in self.events:
+            if event.tool_name not in {"initialize", "observe"}:
+                counts[event.tool_name] = counts.get(event.tool_name, 0) + 1
+        self.tool_call_counts = counts
+        self.llm_calls = sum(counts.values())
+        self.accepted_bo_proposals = min(len(self.observations), len(self.candidates))
+        self.rejected_bo_proposals = max(len(self.candidates) - self.accepted_bo_proposals, 0)
+        self.bound_change_count = sum(
+            event.tool_name == "change_search_bounds" and event.status == "ok"
+            for event in self.events
+        )
+        self.tool_validation_failures = sum(
+            event.status in {"ignored", "malformed"} or event.tool_name == "malformed_tool"
+            for event in self.events
+        )
+        return self
+
+
+class HybridSafetySettings(BaseModel):
+    """Independent validation policy for high-impact hybrid actions."""
+
+    require_budget_exhaustion_for_no_window: bool = False
+    max_candidate_feasibility_for_no_window: float | None = Field(default=None, ge=0.0, le=1.0)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -330,6 +399,50 @@ class HybridLLM(Protocol):
     """Small protocol for fake or real hybrid LLM adapters."""
 
     def decide(self, context: HybridContext) -> HybridToolCall: ...
+
+
+class ResponsesHybridLLM:
+    """Optional OpenAI Responses API adapter for strict hybrid tool calls."""
+
+    def __init__(self, model: str | None = None) -> None:
+        self.model = model or os.environ.get("OPENAI_MODEL", "")
+        if not self.model:
+            raise ValueError("OPENAI_MODEL must be set for a live hybrid run")
+        self.last_token_usage: dict[str, int] = {}
+
+    def decide(self, context: HybridContext) -> HybridToolCall:
+        """Request exactly one strict tool call from the Responses API."""
+
+        try:
+            from openai import OpenAI
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError("Install the llm extra for live hybrid runs") from exc
+        responses_client: Any = OpenAI().responses
+        response: Any = responses_client.create(
+            model=self.model,
+            instructions=(
+                "You orchestrate an educational virtual ASD optimization. Use exactly one "
+                "provided tool. Numerical reactor conditions may only be executed by immutable "
+                "candidate ID after run_bayesian_optimizer returns them. Never request or reveal "
+                "hidden chain-of-thought or oracle information. Keep rationale to four sentences."
+            ),
+            input=context.model_dump_json(indent=2),
+            tools=hybrid_tool_schemas(),
+            tool_choice="required",
+            parallel_tool_calls=False,
+        )
+        usage = getattr(response, "usage", None)
+        response_usage = {
+            key: value
+            for key in ("input_tokens", "output_tokens", "total_tokens")
+            if isinstance((value := getattr(usage, key, None)), int)
+        }
+        for key, value in response_usage.items():
+            self.last_token_usage[key] = self.last_token_usage.get(key, 0) + value
+        for item in getattr(response, "output", []):
+            if getattr(item, "type", None) == "function_call":
+                return parse_hybrid_tool_call(item.name, item.arguments)
+        raise HybridAgentError("Responses API did not return a hybrid function call")
 
 
 class FakeHybridLLM:
@@ -427,13 +540,19 @@ class HybridLLMBOAgent:
         *,
         mode: HybridMode = "hybrid_advisory",
         llm: HybridLLM | None = None,
+        legacy_agent: OptimizationAgent | None = None,
         literature_provider: LiteratureProvider | None = None,
         bo_settings: Stage2BOSettings | None = None,
+        safety_settings: HybridSafetySettings | None = None,
         seed: int | None = None,
+        simulator_seed: int | None = None,
+        optimizer_seed: int | None = None,
+        llm_seed: int | None = None,
     ) -> None:
         self.config = config
         self.mode = mode
         self.llm = llm or FakeHybridLLM()
+        self.legacy_agent = legacy_agent
         self.literature_provider = literature_provider or NullLiteratureProvider()
         self.bo_settings = bo_settings or Stage2BOSettings(
             experiment_budget=6,
@@ -444,7 +563,12 @@ class HybridLLMBOAgent:
             acquisition_timeout_s=2.0,
             random_fallback_points=32,
         )
-        self.seed = config.process.seed if seed is None else seed
+        self.safety_settings = safety_settings or HybridSafetySettings()
+        base_seed = config.process.seed if seed is None else seed
+        self.seed = base_seed
+        self.simulator_seed = base_seed if simulator_seed is None else simulator_seed
+        self.optimizer_seed = base_seed if optimizer_seed is None else optimizer_seed
+        self.llm_seed = base_seed if llm_seed is None else llm_seed
         self.state: HybridState = "INITIALIZE"
         self.observations: list[Stage2Observation] = []
         self.candidates: dict[str, Stage2CandidateProposal] = {}
@@ -455,6 +579,7 @@ class HybridLLMBOAgent:
         self.warnings: list[str] = []
         self.final_experiment_id: str | None = None
         self.evidence_experiment_ids: list[str] = []
+        self.legacy_token_usage: dict[str, int] = {}
 
     def run(self, *, budget: int = 6, max_steps: int = 40) -> HybridRunResult:
         """Run the hybrid state machine without live API calls by default."""
@@ -463,6 +588,8 @@ class HybridLLMBOAgent:
             return self._run_bo_only(budget=budget)
         if self.mode == "llm_only_legacy":
             return self._run_llm_only_legacy(budget=budget)
+        if self.mode == "hybrid_explanation_only":
+            return self._run_hybrid_explanation_only(budget=budget)
 
         self._transition("INITIALIZE", "INSPECT_HISTORY", "initialize", "ok")
         for _ in range(max_steps):
@@ -495,6 +622,9 @@ class HybridLLMBOAgent:
                     candidates=list(self.candidates.values()),
                     soft_bounds=self.soft_bounds,
                     evidence_experiment_ids=list(self.evidence_experiment_ids),
+                    no_window_oracle_correct=(
+                        not Stage2EvaluationOracle(self.config).evaluate().selective_window_exists
+                    ),
                     events=self.events,
                     literature=self.literature,
                     warnings=self.warnings,
@@ -559,6 +689,16 @@ class HybridLLMBOAgent:
                     bounds_args.rationale,
                 )
                 return self.soft_bounds
+            tested_ids = {observation.experiment_id for observation in self.observations}
+            missing_evidence = [
+                evidence_id
+                for evidence_id in bounds_args.evidence_experiment_ids
+                if evidence_id not in tested_ids
+            ]
+            if missing_evidence:
+                raise HybridAgentError(
+                    f"bound-change evidence ids not present in ledger: {missing_evidence}"
+                )
             self.soft_bounds = validate_soft_bounds_change(
                 self.config, self.soft_bounds, bounds_args
             )
@@ -607,7 +747,7 @@ class HybridLLMBOAgent:
             return finish_args
         if tool_call.name == "declare_no_selective_window":
             no_window_args = DeclareNoSelectiveWindowArgs.model_validate(tool_call.arguments)
-            self._validate_no_window_evidence(no_window_args)
+            self._validate_no_window_evidence(no_window_args, budget=budget)
             self.evidence_experiment_ids = list(no_window_args.evidence_experiment_ids)
             self._transition(
                 self.state,
@@ -653,25 +793,13 @@ class HybridLLMBOAgent:
                 "candidate_cycle_values": list(self.soft_bounds.cycle_values),
             }
         )
-        for index in range(max_candidates):
-            result = run_stage2_bo(
-                soft_config,
-                settings,
-                simulator_seed=self.seed,
-                optimizer_seed=self.seed + index,
-                initial_observations=self.observations,
-            )
-            if result.proposals:
-                proposal = result.proposals[-1]
-            else:
-                best = best_stage2_observation(result.observations)
-                if best is None:
-                    continue
-                proposal = Stage2CandidateProposal.create(
-                    decision=best.decision,
-                    optimizer="stage2_mobo_initial",
-                    seed=self.seed + index,
-                )
+        optimizer = Stage2ConstrainedMOBOOptimizer(soft_config, settings, seed=self.optimizer_seed)
+        for _index in range(max_candidates):
+            result = optimizer.propose(self.observations)
+            if result.status != "proposed" or result.proposal is None:
+                self.warnings.extend(result.warnings)
+                break
+            proposal = result.proposal
             if validate_stage2_decision(self.config, proposal.decision):
                 continue
             self.candidates.setdefault(proposal.candidate_id, proposal)
@@ -691,7 +819,7 @@ class HybridLLMBOAgent:
             self.config,
             proposal.decision,
             experiment_id=f"hybrid_{len(self.observations) + 1:03d}",
-            seed=self.seed + len(self.observations),
+            seed=self.simulator_seed + len(self.observations),
         )
         self.executed_candidate_ids.add(candidate_id)
         self.observations.append(observation)
@@ -708,11 +836,31 @@ class HybridLLMBOAgent:
         if not matching[0].constraint_evaluation.feasible:
             raise HybridAgentError("finish_optimization requires a feasible tested experiment")
 
-    def _validate_no_window_evidence(self, args: DeclareNoSelectiveWindowArgs) -> None:
+    def _validate_no_window_evidence(
+        self,
+        args: DeclareNoSelectiveWindowArgs,
+        *,
+        budget: int,
+    ) -> None:
         tested = {obs.experiment_id for obs in self.observations}
         missing = [item for item in args.evidence_experiment_ids if item not in tested]
         if missing:
             raise HybridAgentError(f"evidence ids not present in ledger: {missing}")
+        if (
+            self.safety_settings.require_budget_exhaustion_for_no_window
+            and len(self.observations) < budget
+        ):
+            raise HybridAgentError("no-window declaration requires budget exhaustion")
+        limit = self.safety_settings.max_candidate_feasibility_for_no_window
+        probabilities = [
+            candidate.feasibility_probability
+            for candidate in self.candidates.values()
+            if candidate.feasibility_probability is not None
+        ]
+        if limit is not None and (not probabilities or max(probabilities) > limit):
+            raise HybridAgentError(
+                "no-window declaration exceeds the configured candidate-feasibility limit"
+            )
 
     def _transition(
         self,
@@ -753,8 +901,8 @@ class HybridLLMBOAgent:
         result = run_stage2_bo(
             self.config,
             self.bo_settings.model_copy(update={"experiment_budget": budget}),
-            simulator_seed=self.seed,
-            optimizer_seed=self.seed,
+            simulator_seed=self.simulator_seed,
+            optimizer_seed=self.optimizer_seed,
         )
         status: HybridStatus = "success" if result.status == "success" else "budget_exhausted"
         return HybridRunResult(
@@ -767,26 +915,50 @@ class HybridLLMBOAgent:
             warnings=result.warnings,
         )
 
+    def _run_hybrid_explanation_only(self, *, budget: int) -> HybridRunResult:
+        """Run unchanged BO and collect a non-controlling explanation action."""
+
+        result = self._run_bo_only(budget=budget)
+        self.observations = list(result.observations)
+        self.candidates = {candidate.candidate_id: candidate for candidate in result.candidates}
+        try:
+            tool_call = self.llm.decide(self.context(budget_remaining=0))
+            rationale = concise(str(tool_call.arguments.get("rationale", "")))
+            self._transition(
+                "INITIALIZE",
+                "FINISH",
+                "explanation_only",
+                "ignored_for_control",
+                rationale,
+            )
+        except Exception as exc:
+            self.warnings.append(f"explanation generation failed: {type(exc).__name__}: {exc}")
+        return result.model_copy(
+            update={"events": list(self.events), "warnings": result.warnings + self.warnings}
+        )
+
     def _run_llm_only_legacy(self, *, budget: int) -> HybridRunResult:
-        observations: list[Stage2Observation] = []
-        for condition in candidate_plan(self.config.process):
-            if len(observations) >= budget:
-                break
-            decision = Stage2Decision(
-                precursor_dose_s=condition.precursor_dose_s,
-                temperature_c=condition.temperature_c,
-                cycle_count=condition.cycles,
+        agent = self.legacy_agent or RuleBasedAgent()
+        legacy_run = run_agent_loop(
+            self.config.process,
+            agent,
+            budget=budget,
+            seed=self.simulator_seed,
+            method="llm_only_legacy",
+        )
+        self.legacy_token_usage = dict(legacy_run.token_usage)
+        observations = [
+            Stage2Observation.from_experiment_record(self.config, record, seed=self.simulator_seed)
+            for record in legacy_run.records
+            if not validate_stage2_decision(
+                self.config,
+                Stage2Decision(
+                    precursor_dose_s=record.condition.precursor_dose_s,
+                    temperature_c=record.condition.temperature_c,
+                    cycle_count=record.condition.cycles,
+                ),
             )
-            if validate_stage2_decision(self.config, decision):
-                continue
-            observations.append(
-                observe_stage2_decision(
-                    self.config,
-                    decision,
-                    experiment_id=f"legacy_llm_{len(observations) + 1:03d}",
-                    seed=self.seed + len(observations),
-                )
-            )
+        ]
         final = best_stage2_observation(observations)
         success = final is not None and final.constraint_evaluation.feasible
         return HybridRunResult(
@@ -796,7 +968,14 @@ class HybridLLMBOAgent:
             candidates=[],
             soft_bounds=self.soft_bounds,
             final_experiment_id=final.experiment_id if success and final else None,
-            warnings=["llm_only_legacy preserves the separate legacy LLM comparator path."],
+            warnings=(
+                []
+                if self.legacy_agent is not None
+                else [
+                    "llm_only_legacy used the deterministic rule-based stand-in; pass an explicit "
+                    "legacy agent for a live or fake-LLM comparator."
+                ]
+            ),
         )
 
 
@@ -903,18 +1082,58 @@ def run_hybrid_optimization(
     *,
     mode: HybridMode = "hybrid_advisory",
     llm: HybridLLM | None = None,
+    legacy_agent: OptimizationAgent | None = None,
     literature_provider: LiteratureProvider | None = None,
     bo_settings: Stage2BOSettings | None = None,
+    safety_settings: HybridSafetySettings | None = None,
     seed: int | None = None,
+    simulator_seed: int | None = None,
+    optimizer_seed: int | None = None,
+    llm_seed: int | None = None,
     budget: int = 6,
 ) -> HybridRunResult:
     """Convenience function for notebooks and smoke tests."""
 
-    return HybridLLMBOAgent(
+    agent = HybridLLMBOAgent(
         config,
         mode=mode,
         llm=llm,
+        legacy_agent=legacy_agent,
         literature_provider=literature_provider,
         bo_settings=bo_settings,
+        safety_settings=safety_settings,
         seed=seed,
-    ).run(budget=budget)
+        simulator_seed=simulator_seed,
+        optimizer_seed=optimizer_seed,
+        llm_seed=llm_seed,
+    )
+    started = utc_now()
+    result = agent.run(budget=budget)
+    token_usage = (
+        agent.legacy_token_usage
+        if mode == "llm_only_legacy"
+        else getattr(agent.llm, "last_token_usage", {})
+    )
+    manifest = RunManifest.create(
+        config_path=Path(__file__).resolve().parents[3] / "configs" / f"{config.scenario_id}.yaml",
+        method=mode,
+        scenario=config.scenario_id,
+        experiment_budget=budget,
+        named_seeds={
+            "simulator": config.process.seed,
+            "measurement_noise": agent.simulator_seed,
+            "bo": agent.optimizer_seed,
+            "llm": agent.llm_seed,
+        },
+        acquisition_function="hybrid_stage2_mobo",
+        model_settings=agent.bo_settings.model_dump(mode="json"),
+        llm_model=getattr(agent.llm, "model", None),
+        token_usage=token_usage if isinstance(token_usage, dict) else {},
+        started_at=started,
+    ).mark_finished()
+    return result.model_copy(
+        update={
+            "manifest": manifest,
+            "token_usage": token_usage if isinstance(token_usage, dict) else {},
+        }
+    )

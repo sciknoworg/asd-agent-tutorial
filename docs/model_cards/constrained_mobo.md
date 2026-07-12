@@ -26,6 +26,9 @@ constraints. It is a tutorial benchmark method, not a reactor-control policy.
 - The bounded virtual search space is adequate for small CPU-only studies.
 - One GP per measured outcome is transparent enough for tutorial use.
 - Integer cycle count is handled by conditional enumeration.
+- Selectivity is currently modeled as a separate outcome because the selected BoTorch acquisition
+  API consumes explicit outcome constraints. Candidate diagnostics report selectivity recomputed
+  from posterior GA/NGA means and the discrepancy from the direct selectivity GP.
 
 ## Known Limitations
 
@@ -33,6 +36,9 @@ constraints. It is a tutorial benchmark method, not a reactor-control policy.
 - Small smoke profiles are not paper-scale evidence.
 - Pure-Python acquisition fallback may be slower when BoTorch extensions cannot compile.
 - Oracle values are for evaluation only and must not enter optimizer inputs.
+- Independent outcome GPs do not preserve the exact algebraic relationship between GA, NGA, and
+  selectivity in posterior samples. The consistency diagnostic reveals, but does not remove, this
+  approximation.
 
 ## Reproducibility
 

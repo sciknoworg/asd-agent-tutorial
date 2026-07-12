@@ -106,7 +106,7 @@ class ManualMeasurementRecord(BaseModel):
     measurement_method: str = Field(min_length=1)
     replicate_identifier: str = Field(min_length=1)
     quality_control_status: QualityControlStatus
-    operator_notes: str = ""
+    operator_notes: str = Field(min_length=1)
     measured_at: str = Field(default_factory=utc_now)
 
     model_config = ConfigDict(extra="forbid")
@@ -162,6 +162,38 @@ class ManualLabBackend:
         self.plans: dict[str, ManualLabPlanRow] = {}
         self.ledger: list[Stage2Observation] = []
         self.measurements: dict[str, ManualMeasurementRecord] = {}
+
+    @classmethod
+    def from_plan_json(
+        cls,
+        config: Stage2Config,
+        path: str | Path,
+    ) -> ManualLabBackend:
+        """Restore pending/completed plan state exported by a previous process."""
+
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ManualLabError("manual lab plan JSON must contain an object")
+        scenario_id = payload.get("scenario_id")
+        if scenario_id != config.scenario_id:
+            raise ManualLabError(
+                f"plan scenario {scenario_id!r} does not match {config.scenario_id!r}"
+            )
+        run_id = payload.get("run_id")
+        raw_plans = payload.get("plans")
+        if not isinstance(run_id, str) or not run_id:
+            raise ManualLabError("manual lab plan JSON requires a run_id")
+        if not isinstance(raw_plans, list):
+            raise ManualLabError("manual lab plan JSON requires a plans list")
+        backend = cls(config, run_id=run_id)
+        for raw_plan in raw_plans:
+            plan = ManualLabPlanRow.model_validate(raw_plan)
+            if plan.run_id != run_id:
+                raise ManualLabError("manual lab plan row has a mismatched run_id")
+            if plan.experiment_id in backend.plans:
+                raise ManualLabError(f"duplicate plan experiment_id {plan.experiment_id!r}")
+            backend.plans[plan.experiment_id] = plan
+        return backend
 
     @property
     def backend_name(self) -> str:

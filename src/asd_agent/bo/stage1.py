@@ -28,7 +28,7 @@ class Stage1Objective(BaseModel):
     saturation_fraction: float = Field(default=0.95, gt=0.0, lt=1.0)
     target_growth: float | None = Field(default=None, gt=0.0)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     @model_validator(mode="after")
     def check_mode_specific_fields(self) -> Stage1Objective:
@@ -52,7 +52,7 @@ class Stage1ProcessParameters(BaseModel):
     misspecification_power: float | None = Field(default=None, gt=0.0)
     observation_noise_sigma: float = Field(default=0.0, ge=0.0)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     @model_validator(mode="after")
     def check_family_parameters(self) -> Stage1ProcessParameters:
@@ -100,7 +100,7 @@ class Stage1Config(BaseModel):
     process_time_fixed_s: float = Field(default=0.0, ge=0.0)
     process_time_per_s_dose: float = Field(default=1.0, ge=0.0)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     def optimizer_view(self) -> dict[str, object]:
         """Return only information available to optimizers."""
@@ -121,7 +121,7 @@ class Stage1Dose(BaseModel):
 
     dose_s: float = Field(ge=0.0)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class Stage1ExperimentRecord(BaseModel):
@@ -134,7 +134,7 @@ class Stage1ExperimentRecord(BaseModel):
     decision_rationale: str = ""
     timestamp: str = Field(default_factory=utc_now)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class Stage1VirtualLab:

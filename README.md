@@ -1,165 +1,245 @@
 # ASD Agent Tutorial
 
-Educational Python tutorial for an AI-agent loop in a virtual area-selective deposition
-(ASD) laboratory. The project is inspired by a 2026 ALD optimization paper in which
-reasoning-model agents iteratively propose dose times, receive measurements, and decide
-whether a process is saturated enough to recommend or abandon.
+Reproducible Python software for studying AI-agent loops, Bayesian active learning,
+constrained multi-objective Bayesian optimization, and manual laboratory handoff in an
+educational area-selective deposition (ASD) simulator.
 
-This repository does **not** predict real HfO2/MoS2 chemistry. It uses a toy simulator
-to teach agent design, optimization, benchmarking, reproducibility, and failure modes.
+> This project does not predict real HfO2/MoS2 chemistry. Its equations and scenarios
+> are teaching models for software design, optimization, benchmarking, and failure
+> analysis. Do not use its recommendations as laboratory process guidance.
 
-## Python Target
+## Features
 
-The tutorial targets Python 3.14+, following the latest stable CPython release line
-available from python.org on July 10, 2026: Python 3.14.6. Python 3.15 is still
-pre-release at that date.
+- Seeded two-surface virtual laboratory with GA and NGA growth, nucleation delays,
+  saturating doses, inhibitor blocking, temperature response, noise, and process time.
+- Legacy random search, grid search, deterministic rule-based agent, and optional
+  OpenAI Responses API agent.
+- Stage 1 fixed-grid, generic-GP, and physics-informed-GP saturation learning.
+- Stage 2 constrained noisy multi-objective BO over precursor dose, temperature, and
+  integer cycle count.
+- Hybrid LLM-BO orchestration with immutable candidate IDs and a fake LLM by default.
+- Paired research profiles, bootstrap confidence intervals, McNemar comparisons,
+  Wilcoxon tests, Holm correction, and publication-table exports.
+- Human-operated laboratory plan export and validated measurement ingestion. No
+  autonomous hardware control is included.
+- Eight executable tutorial notebooks and deterministic plotting scripts.
 
-The BO integration has also been exercised in this repository's development
-environment with Python 3.12.13. That records the actually tested local runtime; it
-does not replace the declared project target.
+## Requirements
 
-## Quick Start
+- Python 3.12 through 3.14.
+- The full suite is currently verified on Python 3.12.13.
+- CPU execution is supported. A GPU is optional and not required by the smoke profiles.
 
-```bash
-py -3.14 -m venv .venv
-.venv\Scripts\python -m pip install -U pip
-.venv\Scripts\python -m pip install -e ".[dev,llm,notebooks]"
-```
+Python 3.13 and 3.14 are compatibility targets, not verified environments in the
+current repository record.
 
-For Bayesian-optimization tutorials and smoke checks, install the optional BO stack:
+## Installation
 
-```bash
+Create a virtual environment and install the package in editable mode:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install --upgrade pip
 .venv\Scripts\python -m pip install -e ".[dev,bo,bo-gp,bo-analysis,notebooks]"
 ```
 
-`bo-gp` installs PyTorch, GPyTorch, and BoTorch. `llm` is only needed for live OpenAI
-agent experiments; all default BO, hybrid, and research smoke commands run without
-live API calls.
+Optional extras:
 
-Run a no-API deterministic demo:
+| Extra | Purpose |
+| --- | --- |
+| `bo` | NumPy/SciPy analysis helpers |
+| `bo-gp` | PyTorch, GPyTorch, and BoTorch models |
+| `bo-ax` | Optional Ax experiments; not required by the implemented runners |
+| `bo-analysis` | Statistical and plotting utilities |
+| `llm` | Optional live OpenAI Responses API paths |
+| `notebooks` | JupyterLab and notebook file support |
+| `dev` | pytest, Ruff, mypy, and type stubs |
 
-```bash
+## Quick Start
+
+Run the no-API legacy tutorial:
+
+```powershell
 asd-demo --scenario inherent_selectivity --agent rule_based
+asd-benchmark --repetitions 20 --output-dir results/legacy_benchmark
 ```
 
-Run the benchmark with at least 20 repetitions:
+Run Bayesian-optimization workflows through the integrated CLI:
 
-```bash
-asd-benchmark --repetitions 20 --output-dir results/benchmark_demo
+```powershell
+asd-agent stage1 run --profile smoke --scenario fast_mono --method physics_gp `
+  --output-dir results/stage1_smoke
+
+asd-agent stage2 run --profile smoke --scenario inherent_selectivity `
+  --method stage2_mobo --output-dir results/stage2_smoke
+
+asd-agent hybrid run --scenario narrow_selective_window `
+  --mode hybrid_advisory --fake-llm --output-dir results/hybrid_smoke
 ```
 
-Use the LLM agent:
+The fake LLM is deterministic and makes no network calls.
 
-```bash
-set OPENAI_API_KEY=sk-...
-set OPENAI_MODEL=gpt-5.6
-asd-demo --scenario inhibitor_selectivity --agent llm
+## CLI
+
+```text
+asd-agent stage1 run|compare
+asd-agent stage2 run|compare
+asd-agent hybrid run
+asd-agent study run|analyze
+asd-agent lab export|ingest
 ```
 
-The LLM path uses the OpenAI Responses API with strict function tools:
-`propose_experiments` and `finish_optimization`.
+Show command-specific options with `asd-agent <group> <command> --help`. Seeds,
+budgets, scenarios, profiles, and output directories are explicit command arguments or
+validated YAML values.
 
-## Bayesian Optimization Extension
+### Research studies
 
-The BO tutorial layers are:
-
-- Stage 1 saturation learning with fixed grid, generic GP, and physics-informed GP.
-- Stage 2 constrained multi-objective ASD optimization with random, grid, rule-based,
-  and constrained MOBO methods.
-- Hybrid LLM-BO orchestration with BO as the numerical optimizer and a deterministic
-  fake LLM for no-API tests.
-- Paired research profiles and statistical analysis.
-- Manual laboratory handoff for human-operated validation planning.
-
-Useful smoke commands from a source checkout:
-
-```bash
-python scripts/run_stage1_study.py --profile smoke --output-dir results/bo04_stage1_smoke
-python scripts/run_stage2_benchmark.py --profile smoke --output-dir results/bo07_stage2_smoke
-python scripts/run_hybrid_fake_llm_smoke.py --output-dir results/bo10_hybrid_fake_llm_smoke
-python scripts/run_research_study.py --profile smoke --output-dir results/bo09_research_smoke
-python scripts/run_manual_lab_smoke.py --output-dir results/bo10_manual_lab_smoke
+```powershell
+asd-agent study run --config smoke --output-dir results/study_smoke
+asd-agent study analyze --input results/study_smoke/research_results.json `
+  --output results/study_smoke/analysis
 ```
 
-Paper-scale profiles are configured but intentionally not run by default:
+Larger profiles are configured but are never run automatically:
 
-```bash
-python scripts/run_research_study.py --profile paper_non_llm --output-dir results/paper_non_llm
-python scripts/run_research_study.py --profile paper_llm --output-dir results/paper_llm
+```powershell
+python scripts/run_stage1_study.py --profile pilot --output-dir results/stage1_pilot
+python scripts/run_stage2_benchmark.py --profile pilot --output-dir results/stage2_pilot
+python scripts/run_research_study.py --profile paper_non_llm `
+  --output-dir results/paper_non_llm
+python scripts/run_research_study.py --profile paper_llm `
+  --output-dir results/paper_llm
 ```
 
-Run those only after confirming compute budget, dependency versions, and study design.
+Review compute budgets, resolved dependencies, and the research protocol before
+starting pilot or paper-scale profiles.
 
-## What Is Modeled
+### Optional live LLM
 
-- Growth area (GA) and non-growth area (NGA, representing MoS2 in the tutorial story).
-- Saturating precursor-dose and coreactant-dose responses.
-- Surface-specific maximum growth per cycle.
-- Surface-specific nucleation delay.
-- Optional inhibitor blocking, stronger on NGA in the inhibitor scenario.
-- Optional temperature response.
-- Configurable Gaussian measurement noise.
-- Thickness after `N` cycles.
-- Selectivity `(GA - NGA) / (GA + NGA)`, with zero returned when both are zero.
+Live calls require the `llm` extra, environment credentials, a model name, and an
+explicit live flag:
 
-## Scenarios
+```powershell
+$env:OPENAI_API_KEY = "..."
+$env:OPENAI_MODEL = "your-responses-api-model"
+asd-agent hybrid run --scenario narrow_selective_window `
+  --mode hybrid_advisory --live-llm --output-dir results/hybrid_live
+```
 
-- `inherent_selectivity`: GA nucleates quickly; NGA has a long nucleation delay.
-- `inhibitor_selectivity`: inhibitor strongly blocks NGA and weakly affects GA.
-- `impossible_selectivity`: tested bounds contain no meaningful selective window.
+Tests and default smoke commands never make live API calls. The live hybrid adapter is
+import- and schema-tested but has not been exercised against the API in this repository.
 
-## Default Success Criteria
+## Manual Laboratory Handoff
 
-- GA thickness >= 5 nm.
-- NGA thickness <= 0.5 nm.
-- Selectivity >= 0.80.
-- Temperature and dose times inside configured safety bounds.
+Export one validated, pending experiment plan:
+
+```powershell
+asd-agent lab export --scenario inherent_selectivity --run-id manual_001 `
+  --output results/manual_001
+```
+
+After a human operator completes and reviews the measurement template, import it in a
+later process:
+
+```powershell
+asd-agent lab ingest --scenario inherent_selectivity `
+  --plan results/manual_001/manual_lab_plan.json `
+  --measurements results/manual_001/completed_measurements.csv `
+  --output results/manual_001/optimizer_observations.json
+```
+
+Imported measurements require GA/NGA thickness in nanometers, a measurement method,
+replicate ID, quality-control status, and operator notes. See
+[`docs/lab_validation_protocol.md`](docs/lab_validation_protocol.md).
+
+## Configuration
+
+YAML files in `configs/` define:
+
+- the three legacy ASD scenarios;
+- six Stage 1 saturation-process families;
+- eight Stage 2 constrained optimization scenarios;
+- Stage 1 and Stage 2 smoke/pilot profiles;
+- paired smoke, pilot, paper non-LLM, and paper LLM study profiles.
+
+Hidden simulator parameters remain in the backend configuration. Optimizers and LLM
+contexts receive explicit optimizer-facing views that exclude oracle values and hidden
+process constants.
+
+## Outputs and Reproducibility
+
+Generated files are written below `results/` and ignored by Git except for
+`results/.gitkeep`. Depending on the command, outputs include:
+
+- experiment ledgers and optimizer proposals in JSON/CSV;
+- run manifests with Git commit, configuration hash, Python/dependency versions,
+  named seeds, method settings, and timestamps;
+- hypervolume trajectories, failure categories, and constraint outcomes;
+- CSV source data beside PNG, SVG, and PDF figures;
+- JSON, CSV, Markdown, and LaTeX statistical tables;
+- manual laboratory plans, templates, and imported observations.
+
+Every stochastic simulator and optimizer path accepts an explicit seed. Paired studies
+persist separate simulator, measurement-noise, initialization, BO, and LLM seed streams.
 
 ## Repository Layout
 
 ```text
-configs/        Scenario definitions
-src/asd_agent/  Simulator, agents, baselines, BO, benchmark, plotting
-notebooks/      Tutorial notebooks
-docs/           Protocols, model cards, implementation notes
-tests/          Pytest suite
-results/        Generated ledgers, metadata, plots, and benchmark outputs
+configs/             Scenario and study YAML
+docs/                Protocols, implementation records, and model cards
+notebooks/           Eight tutorial notebooks
+prompts/             Prompt-data guidance; no agent traces
+scripts/             Reproducible smoke, benchmark, and plotting entry points
+src/asd_agent/       Installable package
+src/asd_agent/bo/    BO, hybrid, statistics, oracle, and lab-handoff modules
+tests/               Unit and integration tests
+results/             Ignored generated outputs
 ```
 
-## Reproducibility
+## Development
 
-Every run records configuration, timestamp, seed, model name, token usage, and an
-experiment ledger as CSV and JSON. Random-search and simulator noise use explicit
-NumPy seeds. The default demo mode uses the deterministic rule-based agent and does
-not require API credentials.
+Run the complete local verification suite:
 
-BO research runs additionally record paired scenario/repetition IDs and named seeds
-for simulator, measurement noise, initialization, BO, and LLM behavior. Statistical
-analysis outputs are regenerated from saved CSV/JSON rows.
+```powershell
+ruff format --check .
+ruff check .
+mypy src
+pytest
+```
 
-## Manual Laboratory Handoff
+The test suite covers simulator behavior, safety bounds, schemas, oracle isolation,
+tested recommendations, GP posteriors, mixed-variable MOBO, hybrid bypass prevention,
+paired statistics, save/restore, and manual-lab ingestion.
 
-`ManualLabBackend` exports validated Stage 2 optimizer candidates as CSV and JSON lab
-plans, marks them pending, imports completed human-operated measurements, validates
-nanometer units and required fields, and converts accepted measurements into Stage 2
-observations so BO can continue.
+## Documentation
 
-This is a handoff and record-keeping workflow only. It does not control a reactor,
-does not replace laboratory safety review, and does not validate the toy simulator as
-real chemistry. See `docs/lab_validation_protocol.md`.
+- [Research protocol](docs/research_protocol.md)
+- [Tutorial outline](docs/tutorial_outline.md)
+- [Laboratory validation protocol](docs/lab_validation_protocol.md)
+- [Generic GP model card](docs/model_cards/generic_gp.md)
+- [Physics-informed GP model card](docs/model_cards/physics_informed_gp.md)
+- [Constrained MOBO model card](docs/model_cards/constrained_mobo.md)
+- [Hybrid agent model card](docs/model_cards/hybrid_agent.md)
 
 ## Limitations
 
-- The simulator is educational and non-predictive.
-- Oracle information is for evaluation only and must not enter optimizer or LLM inputs.
-- Smoke and pilot profiles are software checks, not research conclusions.
-- Live LLM calls are opt-in and require environment credentials.
-- Real laboratory validation requires independent safety review, instrument mapping,
-  measurement uncertainty protocols, and human sign-off.
+- The simulator is not calibrated to experimental chemistry.
+- Oracle fronts and true saturation values exist only for retrospective virtual
+  evaluation and are not laboratory ground truth.
+- Independent Stage 2 outcome GPs do not exactly preserve the algebraic relationship
+  between GA, NGA, and selectivity; consistency diagnostics are recorded.
+- Smoke and pilot profiles verify software pipelines but are not research conclusions.
+- Python 3.13/3.14, GPU execution, Ax integration, live LLM behavior, and paper-scale
+  runtime have not been verified in the current environment.
+- Manual plan validation is not a substitute for institutional safety review, equipment
+  limits, calibration, replicates, uncertainty analysis, or qualified human approval.
 
-## Source Inspiration
+## Scientific Inspiration
 
-The high-level agent loop is inspired by Angel Yanguas-Gil, "Performance of AI agents
-based on reasoning language models on ALD process optimization tasks," J. Vac. Sci.
-Technol. A 44, 043410 (2026), DOI: 10.1116/6.0005313. The simulator and scenarios here
-are intentionally simplified and educational.
+The high-level agent loop is inspired by Angel Yanguas-Gil, “Performance of AI agents
+based on reasoning language models on ALD process optimization tasks,” *Journal of
+Vacuum Science & Technology A* 44, 043410 (2026), DOI: 10.1116/6.0005313.
+
+The implementation, equations, parameter values, scenarios, and benchmark claims in
+this repository are independent educational constructs.

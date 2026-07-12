@@ -58,9 +58,7 @@ def estimate_stage1_target_growth(
     """Estimate the growth threshold using optimizer-visible information only."""
 
     if config.objective.mode == "known_target":
-        if config.objective.target_growth is None:
-            return None
-        return config.objective.saturation_fraction * config.objective.target_growth
+        return config.objective.target_growth
 
     visible_values = [record.observed_growth for record in records]
     visible_values.extend(posterior_mean)
@@ -195,13 +193,18 @@ def smallest_tested_recommendation(
     records: Sequence[Stage1ExperimentRecord],
     *,
     posterior_mean: Sequence[float] = (),
+    target_growth: float | None = None,
     min_observations: int = 1,
 ) -> tuple[Stage1Recommendation, str] | None:
     """Return the smallest tested dose meeting the current threshold estimate."""
 
     if len(records) < min_observations:
         return None
-    target = estimate_stage1_target_growth(config, records, posterior_mean)
+    target = (
+        target_growth
+        if target_growth is not None
+        else estimate_stage1_target_growth(config, records, posterior_mean)
+    )
     if target is None:
         return None
     eligible = [record for record in records if record.observed_growth >= target]

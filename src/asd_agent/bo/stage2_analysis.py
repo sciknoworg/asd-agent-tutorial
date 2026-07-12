@@ -107,9 +107,9 @@ def write_search_trajectories(
     ax.set_title("Search Trajectories")
     ax.legend(loc="best")
     fig.tight_layout()
-    fig.savefig(png_path, dpi=160)
+    figure_paths = save_figure(fig, png_path)
     plt.close(fig)
-    return [csv_path, png_path]
+    return [csv_path, *figure_paths]
 
 
 def write_pareto_fronts(
@@ -141,9 +141,9 @@ def write_pareto_fronts(
     ax.set_title("Observed and Oracle Pareto Fronts")
     ax.legend(loc="best")
     fig.tight_layout()
-    fig.savefig(png_path, dpi=160)
+    figure_paths = save_figure(fig, png_path)
     plt.close(fig)
-    return [csv_path, png_path]
+    return [csv_path, *figure_paths]
 
 
 def pareto_front_rows(
@@ -254,9 +254,9 @@ def write_hypervolume_by_iteration(
     if rows:
         ax.legend(fontsize=7, loc="best")
     fig.tight_layout()
-    fig.savefig(png_path, dpi=160)
+    figure_paths = save_figure(fig, png_path)
     plt.close(fig)
-    return [csv_path, png_path]
+    return [csv_path, *figure_paths]
 
 
 def write_metric_bar(
@@ -276,8 +276,7 @@ def write_metric_bar(
     write_csv(rows, csv_path)
     labels = [f"{row['scenario_id']}\n{row['method']}" for row in rows]
     values = [as_float(row["mean"]) for row in rows]
-    plot_bar(labels, values, title, metric, png_path)
-    return [csv_path, png_path]
+    return [csv_path, *plot_bar(labels, values, title, metric, png_path)]
 
 
 def aggregate_metric_rows(
@@ -330,8 +329,10 @@ def write_robustness_by_scenario(
     write_csv(rows, csv_path)
     labels = [f"{row['scenario_id']}\n{row['method']}" for row in rows]
     values = [as_float(row["success_rate"]) for row in rows]
-    plot_bar(labels, values, "Robustness By Scenario", "success rate", png_path)
-    return [csv_path, png_path]
+    return [
+        csv_path,
+        *plot_bar(labels, values, "Robustness By Scenario", "success rate", png_path),
+    ]
 
 
 def write_failure_taxonomy(
@@ -354,8 +355,7 @@ def write_failure_taxonomy(
     write_csv(rows, csv_path)
     labels = [f"{row['method']}\n{row['failure_category']}" for row in rows]
     values = [as_float(row["count"]) for row in rows]
-    plot_bar(labels, values, "Failure Taxonomy", "count", png_path)
-    return [csv_path, png_path]
+    return [csv_path, *plot_bar(labels, values, "Failure Taxonomy", "count", png_path)]
 
 
 def plot_bar(
@@ -364,7 +364,7 @@ def plot_bar(
     title: str,
     ylabel: str,
     path: Path,
-) -> None:
+) -> list[Path]:
     """Write a compact bar chart."""
 
     plt = pyplot()
@@ -375,8 +375,20 @@ def plot_bar(
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     fig.tight_layout()
-    fig.savefig(path, dpi=160)
+    paths = save_figure(fig, path)
     plt.close(fig)
+    return paths
+
+
+def save_figure(fig: Any, png_path: Path) -> list[Path]:
+    """Save raster and vector variants of a publication figure."""
+
+    svg_path = png_path.with_suffix(".svg")
+    pdf_path = png_path.with_suffix(".pdf")
+    fig.savefig(png_path, dpi=160)
+    fig.savefig(svg_path)
+    fig.savefig(pdf_path)
+    return [png_path, svg_path, pdf_path]
 
 
 def line_key(row: dict[str, object]) -> str:

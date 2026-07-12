@@ -22,6 +22,8 @@ class Range(BaseModel):
     min: float
     max: float
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
     @model_validator(mode="after")
     def check_order(self) -> Range:
         if self.max < self.min:
@@ -56,6 +58,8 @@ class ObjectiveConstraints(BaseModel):
     nga_max_nm: float = 0.5
     selectivity_min: float = 0.80
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
 
 class SurfaceParams(BaseModel):
     """Toy surface-response parameters for GA or NGA."""
@@ -70,6 +74,8 @@ class SurfaceParams(BaseModel):
     temperature_width_c: float = Field(default=50.0, gt=0)
     temperature_min_factor: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
 
 class ExperimentCondition(BaseModel):
     """A proposed virtual experiment."""
@@ -80,7 +86,7 @@ class ExperimentCondition(BaseModel):
     temperature_c: float
     cycles: int = Field(ge=0)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     def rounded_key(self) -> tuple[float, float, float, float, int]:
         return (
@@ -104,6 +110,8 @@ class ProcessConfig(BaseModel):
     surfaces: dict[str, SurfaceParams]
     safety: SafetyBounds
     objective: ObjectiveConstraints = Field(default_factory=ObjectiveConstraints)
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     @model_validator(mode="after")
     def require_surfaces(self) -> ProcessConfig:

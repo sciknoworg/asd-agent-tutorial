@@ -278,6 +278,7 @@ def run_stage2_research_pair(
         budget=profile.stage2_budget,
         initial_design_size=profile.stage2_initial_design_size,
         simulator_seed=schedule.seeds.measurement_noise,
+        initialization_seed=schedule.seeds.initialization,
         optimizer_seed=schedule.seeds.bo,
         candidate_cycle_values=list(profile.stage2_candidate_cycle_values),
         mobo_qmc_samples=profile.mobo_qmc_samples,
@@ -339,7 +340,9 @@ def run_hybrid_research_pair(
             llm=FakeHybridLLM("intervention"),
             literature_provider=literature,
             bo_settings=settings,
-            seed=schedule.seeds.llm if mode.startswith("hybrid") else schedule.seeds.bo,
+            simulator_seed=schedule.seeds.measurement_noise,
+            optimizer_seed=schedule.seeds.bo,
+            llm_seed=schedule.seeds.llm,
             budget=profile.hybrid_budget,
         )
         rows.append(

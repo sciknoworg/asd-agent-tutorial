@@ -43,7 +43,9 @@ class CandidateProposal(BaseModel):
     candidate_id: str = Field(min_length=1)
     parameters: ExperimentCondition
     optimizer: str = Field(min_length=1)
+    model_version: str | None = None
     acquisition_value: float | None = None
+    feasibility_probability: float | None = Field(default=None, ge=0.0, le=1.0)
     posterior_summaries: dict[str, float] = Field(default_factory=dict)
     training_observation_ids: list[str] = Field(default_factory=list)
     seed: int | None = None
@@ -58,7 +60,9 @@ class CandidateProposal(BaseModel):
         optimizer: str,
         *,
         acquisition_value: float | None = None,
+        feasibility_probability: float | None = None,
         posterior_summaries: dict[str, float] | None = None,
+        model_version: str | None = None,
         training_observation_ids: Iterable[str] = (),
         seed: int | None = None,
         timestamp: str | None = None,
@@ -69,7 +73,9 @@ class CandidateProposal(BaseModel):
             candidate_id=make_candidate_id(optimizer),
             parameters=parameters,
             optimizer=optimizer,
+            model_version=model_version,
             acquisition_value=acquisition_value,
+            feasibility_probability=feasibility_probability,
             posterior_summaries=posterior_summaries or {},
             training_observation_ids=list(training_observation_ids),
             seed=seed,
@@ -116,6 +122,15 @@ class BOExperimentRecord(BaseModel):
     experiment: ExperimentRecord
     proposal: CandidateProposal | None = None
     optimizer_observation: OptimizerObservation
+    run_id: str | None = None
+    candidate_id: str | None = None
+    measurement_uncertainty: dict[str, float] = Field(default_factory=dict)
+    feasibility: bool | None = None
+    constraint_violations: list[str] = Field(default_factory=list)
+    simulator_seed: int | None = None
+    optimizer_seed: int | None = None
+    agent_action: str | None = None
+    concise_rationale: str = ""
     oracle_evaluation: dict[str, object] = Field(default_factory=dict)
     metadata: dict[str, object] = Field(default_factory=dict)
 
@@ -127,6 +142,11 @@ class BOExperimentRecord(BaseModel):
         record: ExperimentRecord,
         proposal: CandidateProposal | None = None,
         *,
+        run_id: str | None = None,
+        measurement_uncertainty: dict[str, float] | None = None,
+        simulator_seed: int | None = None,
+        optimizer_seed: int | None = None,
+        agent_action: str | None = None,
         oracle_evaluation: dict[str, object] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> BOExperimentRecord:
@@ -136,6 +156,15 @@ class BOExperimentRecord(BaseModel):
             experiment=record,
             proposal=proposal,
             optimizer_observation=OptimizerObservation.from_experiment_record(record),
+            run_id=run_id,
+            candidate_id=proposal.candidate_id if proposal is not None else None,
+            measurement_uncertainty=measurement_uncertainty or {},
+            feasibility=record.meets_objective,
+            constraint_violations=list(record.failure_reasons),
+            simulator_seed=simulator_seed,
+            optimizer_seed=optimizer_seed,
+            agent_action=agent_action,
+            concise_rationale=record.decision_rationale,
             oracle_evaluation=oracle_evaluation or {},
             metadata=metadata or {},
         )
@@ -161,6 +190,10 @@ class RunManifest(BaseModel):
     method: str
     scenario: str
     experiment_budget: int
+    acquisition_function: str | None = None
+    model_settings: dict[str, object] = Field(default_factory=dict)
+    llm_model: str | None = None
+    token_usage: dict[str, int] = Field(default_factory=dict)
     started_at: str = Field(default_factory=utc_now)
     finished_at: str | None = None
 
@@ -175,6 +208,10 @@ class RunManifest(BaseModel):
         scenario: str,
         experiment_budget: int,
         named_seeds: dict[str, int],
+        acquisition_function: str | None = None,
+        model_settings: dict[str, object] | None = None,
+        llm_model: str | None = None,
+        token_usage: dict[str, int] | None = None,
         dependency_names: Iterable[str] = DEFAULT_DEPENDENCY_NAMES,
         repo_root: str | Path | None = None,
         run_id: str | None = None,
@@ -194,8 +231,12 @@ class RunManifest(BaseModel):
             operating_system=platform.platform(),
             named_seeds=dict(named_seeds),
             method=method,
+            acquisition_function=acquisition_function,
+            model_settings=model_settings or {},
             scenario=scenario,
             experiment_budget=experiment_budget,
+            llm_model=llm_model,
+            token_usage=token_usage or {},
             started_at=started_at or utc_now(),
         )
 

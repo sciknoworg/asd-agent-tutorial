@@ -85,12 +85,33 @@ class FailureSummaryRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DescriptiveSummaryRow(BaseModel):
+    """Distribution and success summary for one method/scenario."""
+
+    study_area: StudyArea
+    scenario_id: str
+    method: str
+    metric: str
+    n: int
+    mean: float
+    standard_deviation: float
+    median: float
+    q1: float
+    q3: float
+    success_rate: float
+    success_ci_low: float
+    success_ci_high: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ResearchAnalysis(BaseModel):
     """Serializable research-analysis payload."""
 
     comparisons: list[PairedEffectResult] = Field(default_factory=list)
     cumulative_success: list[CumulativeSuccessPoint] = Field(default_factory=list)
     failure_summary: list[FailureSummaryRow] = Field(default_factory=list)
+    descriptive_summary: list[DescriptiveSummaryRow] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -169,6 +190,7 @@ def analyze_research_results(
         comparisons=comparisons,
         cumulative_success=cumulative_success_curve(rows),
         failure_summary=failure_category_summary(rows),
+        descriptive_summary=descriptive_summary(rows),
     )
 
 
@@ -382,6 +404,58 @@ def failure_category_summary(rows: Sequence[ResearchResultRow]) -> list[FailureS
     return summaries
 
 
+def descriptive_summary(rows: Sequence[ResearchResultRow]) -> list[DescriptiveSummaryRow]:
+    """Return median, IQR, mean, SD, and Wilson success intervals."""
+
+    grouped: dict[tuple[StudyArea, str, str, str], list[ResearchResultRow]] = defaultdict(list)
+    for row in rows:
+        grouped[(row.study_area, row.scenario_id, row.method, row.primary_metric_name)].append(row)
+    summaries: list[DescriptiveSummaryRow] = []
+    for (study_area, scenario_id, method, metric), group in sorted(grouped.items()):
+        values = np.asarray(
+            [row.primary_metric_value for row in group if math.isfinite(row.primary_metric_value)],
+            dtype=float,
+        )
+        successes = sum(row.success for row in group)
+        ci_low, ci_high = wilson_interval(successes, len(group))
+        summaries.append(
+            DescriptiveSummaryRow(
+                study_area=study_area,
+                scenario_id=scenario_id,
+                method=method,
+                metric=metric,
+                n=int(values.size),
+                mean=float(values.mean()) if values.size else math.nan,
+                standard_deviation=float(values.std(ddof=1)) if values.size > 1 else 0.0,
+                median=float(np.median(values)) if values.size else math.nan,
+                q1=float(np.quantile(values, 0.25)) if values.size else math.nan,
+                q3=float(np.quantile(values, 0.75)) if values.size else math.nan,
+                success_rate=successes / len(group) if group else math.nan,
+                success_ci_low=ci_low,
+                success_ci_high=ci_high,
+            )
+        )
+    return summaries
+
+
+def wilson_interval(
+    successes: int, total: int, z_value: float = 1.959963984540054
+) -> tuple[float, float]:
+    """Return a two-sided Wilson interval for a binomial success rate."""
+
+    if total <= 0:
+        return math.nan, math.nan
+    proportion = successes / total
+    denominator = 1.0 + z_value**2 / total
+    center = (proportion + z_value**2 / (2.0 * total)) / denominator
+    half_width = (
+        z_value
+        * math.sqrt(proportion * (1.0 - proportion) / total + z_value**2 / (4.0 * total**2))
+        / denominator
+    )
+    return max(0.0, center - half_width), min(1.0, center + half_width)
+
+
 def save_research_analysis(
     rows: Sequence[ResearchResultRow],
     output_dir: str | Path,
@@ -403,12 +477,14 @@ def save_research_analysis(
     comparison_rows = [result.model_dump(mode="json") for result in analysis.comparisons]
     cumulative_rows = [point.model_dump(mode="json") for point in analysis.cumulative_success]
     failure_rows = [row.model_dump(mode="json") for row in analysis.failure_summary]
+    descriptive_rows = [row.model_dump(mode="json") for row in analysis.descriptive_summary]
 
     paths = {
         "json": destination / "research_statistics.json",
         "comparisons_csv": destination / "paired_effects.csv",
         "cumulative_csv": destination / "cumulative_success.csv",
         "failures_csv": destination / "failure_summary.csv",
+        "descriptive_csv": destination / "descriptive_summary.csv",
         "markdown": destination / "research_statistics.md",
         "latex": destination / "research_statistics.tex",
     }
@@ -418,6 +494,7 @@ def save_research_analysis(
     write_dict_rows(comparison_rows, paths["comparisons_csv"], paired_effect_fieldnames())
     write_dict_rows(cumulative_rows, paths["cumulative_csv"], cumulative_fieldnames())
     write_dict_rows(failure_rows, paths["failures_csv"], failure_fieldnames())
+    write_dict_rows(descriptive_rows, paths["descriptive_csv"], descriptive_fieldnames())
     paths["markdown"].write_text(markdown_report(analysis), encoding="utf-8")
     paths["latex"].write_text(latex_report(analysis), encoding="utf-8")
     return paths
@@ -501,6 +578,25 @@ def markdown_report(analysis: ResearchAnalysis) -> str:
                 "bootstrap_ci_high",
                 "mcnemar_p_value",
                 "holm_adjusted_wilcoxon_p_value",
+            ],
+        ),
+        "",
+        "## Descriptive Statistics",
+        "",
+        markdown_table(
+            [row.model_dump(mode="json") for row in analysis.descriptive_summary],
+            [
+                "scenario_id",
+                "method",
+                "n",
+                "median",
+                "q1",
+                "q3",
+                "mean",
+                "standard_deviation",
+                "success_rate",
+                "success_ci_low",
+                "success_ci_high",
             ],
         ),
         "",
@@ -622,6 +718,26 @@ def failure_fieldnames() -> list[str]:
     """Return stable failure-summary CSV headers."""
 
     return ["study_area", "scenario_id", "method", "failure_category", "count", "total", "fraction"]
+
+
+def descriptive_fieldnames() -> list[str]:
+    """Return stable descriptive-statistics CSV headers."""
+
+    return [
+        "study_area",
+        "scenario_id",
+        "method",
+        "metric",
+        "n",
+        "mean",
+        "standard_deviation",
+        "median",
+        "q1",
+        "q3",
+        "success_rate",
+        "success_ci_low",
+        "success_ci_high",
+    ]
 
 
 def rows_from_json(payload: Iterable[dict[str, Any]]) -> list[ResearchResultRow]:
