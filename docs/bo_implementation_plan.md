@@ -548,35 +548,49 @@ Explicit non-goals:
 ### BO-09: Research-Study Harness and Statistics
 
 Purpose:
-- Add a reproducible research harness for repeated BO, baseline, and hybrid-agent
-  experiments with statistical summaries.
+- Add a reproducible paired research harness for repeated Stage 1, Stage 2, and
+  hybrid-agent experiments with statistical summaries.
 
 Dependencies:
 - BO-07 and BO-08.
-- Scientific analysis dependencies only after explicit addition.
+- Existing BO optional dependencies. BO-09 does not add new package requirements.
 
 Expected files:
-- `src/asd_agent/bo/study.py`
+- `src/asd_agent/bo/research.py`
 - `src/asd_agent/bo/statistics.py`
-- `tests/test_bo_study.py`
-- `tests/test_bo_statistics.py`
-- `docs/study_protocol.md`
+- `configs/bo_research_smoke_profile.yaml`
+- `configs/bo_research_pilot_profile.yaml`
+- `configs/bo_research_paper_non_llm_profile.yaml`
+- `configs/bo_research_paper_llm_profile.yaml`
+- `scripts/run_research_study.py`
+- `tests/test_bo_research.py`
+- `docs/research_protocol.md`
+- `notebooks/08_research_benchmark_and_statistics.ipynb`
+- `docs/implementation/BO-09.md`
 
 Acceptance criteria:
-- Study runs record seeds, scenario versions, method versions, dependency versions,
-  budgets, and failure categories.
-- Statistical summaries are reproducible from saved CSV/JSON outputs.
-- LLM variability analysis remains separate from deterministic BO variability.
+- Research profiles define smoke, pilot, paper non-LLM, and paper LLM repetition
+  counts, with paper-scale profiles left unrun by default.
+- Study rows record paired scenario/repetition identifiers, named seeds, method,
+  status, success, primary metric, and failure category.
+- Stage 1, Stage 2, and hybrid runs share matched scenario instances, initial
+  designs where applicable, and deterministic noise streams.
+- Statistical summaries are reproducible from normalized rows and are exported as
+  CSV, JSON, Markdown, and LaTeX tables.
+- The fake-LLM hybrid path is used by default; live API variability remains a
+  future opt-in study design.
 
 Tests:
-- Study manifest serialization.
-- Statistical summary calculations on small fixed fixtures.
-- Reproducibility of repeated deterministic runs.
+- Paired seed scheduling and named seed determinism.
+- Statistical summary calculations on fixed fixtures.
+- Holm correction, empty-result handling, and artifact generation.
+- Reproducibility of a tiny deterministic paired run.
 
 Explicit non-goals:
 - No claims that toy outcomes generalize to real chemistry.
 - No live API calls in default tests.
 - No publication-ready conclusions without separate review.
+- No paper-scale profile execution in BO-09 verification.
 
 ### BO-10: Laboratory Handoff, Notebooks, and Final Documentation
 

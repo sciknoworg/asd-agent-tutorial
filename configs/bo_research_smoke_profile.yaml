@@ -1,0 +1,36 @@
+profile_id: bo_research_smoke
+description: Tiny paired BO-09 profile for CPU-only research-harness smoke checks.
+repetitions: 2
+include_stage1: true
+include_stage2: true
+include_hybrid: true
+stage1_scenarios:
+  - bo_stage1_fast_mono
+stage2_scenarios:
+  - bo_stage2_inherent_selectivity
+hybrid_scenarios:
+  - bo_stage2_inherent_selectivity
+stage1_methods:
+  - generic_gp
+  - physics_gp
+stage2_methods:
+  - random_search
+  - grid_search
+  - rule_based
+  - stage2_mobo
+hybrid_modes:
+  - bo_only
+  - hybrid_intervention
+stage1_budget: 5
+stage2_budget: 3
+hybrid_budget: 3
+stage1_candidate_grid_size: 21
+stage2_initial_design_size: 2
+stage2_candidate_cycle_values: [30, 50, 70]
+mobo_qmc_samples: 8
+mobo_num_restarts: 1
+mobo_raw_samples: 8
+mobo_acquisition_timeout_s: 2.0
+random_fallback_points: 24
+seed_base: 9009
+bootstrap_iterations: 200

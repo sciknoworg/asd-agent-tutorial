@@ -1,0 +1,47 @@
+profile_id: bo_research_paper_non_llm
+description: Paper-scale paired non-LLM profile; do not run as part of routine checks.
+repetitions: 100
+include_stage1: true
+include_stage2: true
+include_hybrid: false
+stage1_scenarios:
+  - bo_stage1_fast_mono
+  - bo_stage1_slow_mono
+  - bo_stage1_soft_biexponential
+  - bo_stage1_noisy
+  - bo_stage1_weak_nonselflimited
+  - bo_stage1_misspecified
+stage2_scenarios:
+  - bo_stage2_inherent_selectivity
+  - bo_stage2_inhibitor_selectivity
+  - bo_stage2_narrow_selective_window
+  - bo_stage2_noisy_measurements
+  - bo_stage2_boundary_optimum
+  - bo_stage2_soft_selectivity_breakdown
+  - bo_stage2_model_misspecification
+  - bo_stage2_impossible_selectivity
+hybrid_scenarios: []
+stage1_methods:
+  - generic_gp
+  - physics_gp
+stage2_methods:
+  - random_search
+  - grid_search
+  - rule_based
+  - stage2_mobo
+hybrid_modes:
+  - bo_only
+  - hybrid_intervention
+stage1_budget: 10
+stage2_budget: 8
+hybrid_budget: 1
+stage1_candidate_grid_size: 61
+stage2_initial_design_size: 4
+stage2_candidate_cycle_values: [10, 20, 30, 40, 50, 60, 70, 80, 90]
+mobo_qmc_samples: 32
+mobo_num_restarts: 2
+mobo_raw_samples: 32
+mobo_acquisition_timeout_s: 8.0
+random_fallback_points: 128
+seed_base: 29009
+bootstrap_iterations: 5000

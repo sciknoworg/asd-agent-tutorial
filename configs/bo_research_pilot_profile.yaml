@@ -1,0 +1,45 @@
+profile_id: bo_research_pilot
+description: Paired pilot profile with 20 repetitions for local pre-paper checks.
+repetitions: 20
+include_stage1: true
+include_stage2: true
+include_hybrid: true
+stage1_scenarios:
+  - bo_stage1_fast_mono
+  - bo_stage1_slow_mono
+  - bo_stage1_noisy
+  - bo_stage1_misspecified
+stage2_scenarios:
+  - bo_stage2_inherent_selectivity
+  - bo_stage2_narrow_selective_window
+  - bo_stage2_noisy_measurements
+  - bo_stage2_boundary_optimum
+  - bo_stage2_impossible_selectivity
+hybrid_scenarios:
+  - bo_stage2_inherent_selectivity
+  - bo_stage2_narrow_selective_window
+  - bo_stage2_impossible_selectivity
+stage1_methods:
+  - generic_gp
+  - physics_gp
+stage2_methods:
+  - random_search
+  - grid_search
+  - rule_based
+  - stage2_mobo
+hybrid_modes:
+  - bo_only
+  - hybrid_intervention
+stage1_budget: 8
+stage2_budget: 6
+hybrid_budget: 6
+stage1_candidate_grid_size: 41
+stage2_initial_design_size: 3
+stage2_candidate_cycle_values: [20, 30, 40, 50, 60, 70, 80]
+mobo_qmc_samples: 16
+mobo_num_restarts: 1
+mobo_raw_samples: 16
+mobo_acquisition_timeout_s: 4.0
+random_fallback_points: 64
+seed_base: 19009
+bootstrap_iterations: 2000

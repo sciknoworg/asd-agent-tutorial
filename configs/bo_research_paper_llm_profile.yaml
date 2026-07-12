@@ -1,0 +1,42 @@
+profile_id: bo_research_paper_llm
+description: Paper-scale paired hybrid-agent profile; use fake LLM by default unless changed.
+repetitions: 30
+include_stage1: false
+include_stage2: false
+include_hybrid: true
+stage1_scenarios: []
+stage2_scenarios: []
+hybrid_scenarios:
+  - bo_stage2_inherent_selectivity
+  - bo_stage2_narrow_selective_window
+  - bo_stage2_noisy_measurements
+  - bo_stage2_boundary_optimum
+  - bo_stage2_model_misspecification
+  - bo_stage2_impossible_selectivity
+stage1_methods:
+  - generic_gp
+  - physics_gp
+stage2_methods:
+  - random_search
+  - grid_search
+  - rule_based
+  - stage2_mobo
+hybrid_modes:
+  - bo_only
+  - hybrid_advisory
+  - hybrid_intervention
+  - hybrid_explanation_only
+  - rule_based_bo
+stage1_budget: 1
+stage2_budget: 1
+hybrid_budget: 8
+stage1_candidate_grid_size: 41
+stage2_initial_design_size: 4
+stage2_candidate_cycle_values: [10, 20, 30, 40, 50, 60, 70, 80, 90]
+mobo_qmc_samples: 32
+mobo_num_restarts: 2
+mobo_raw_samples: 32
+mobo_acquisition_timeout_s: 8.0
+random_fallback_points: 128
+seed_base: 39009
+bootstrap_iterations: 5000

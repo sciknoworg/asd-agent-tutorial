@@ -668,3 +668,62 @@ Rationale:
 Consequences:
 - `notebooks/07_hybrid_llm_bo_agent.ipynb` runs with the fake LLM by default.
 - Tests cover malformed-tool handling and state-transition safety.
+
+## D-046 - BO-09 Uses Normalized Research Rows
+
+Decision:
+- BO-09 stores Stage 1, Stage 2, and hybrid outcomes as `ResearchResultRow`
+  records with a shared schema for pair ID, named seeds, method, status, success,
+  primary metric, metrics payload, and failure category.
+
+Rationale:
+- The statistical harness should not depend on hidden simulator fields or
+  method-specific internal objects after a run is complete.
+
+Consequences:
+- CSV, JSON, Markdown, and LaTeX reports can be regenerated from normalized rows.
+- Oracle-only values remain outside optimizer-facing and LLM-facing records.
+
+## D-047 - Research Comparisons Are Paired By Scenario And Repetition
+
+Decision:
+- Every research profile creates deterministic `pair_id` values and named seeds for
+  simulator, measurement noise, initialization, BO, and LLM behavior.
+
+Rationale:
+- Paired comparisons reduce variance and make method differences easier to audit.
+
+Consequences:
+- Methods within a pair reuse matched scenario instances, initial designs where
+  applicable, and noise streams.
+- Tests assert deterministic schedule generation.
+
+## D-048 - Paper Profiles Are Configuration Only In BO-09
+
+Decision:
+- BO-09 defines smoke, pilot, paper non-LLM, and paper LLM profiles, but routine
+  verification runs only smoke or smaller checks.
+
+Rationale:
+- The repository needs reproducible paper-scale settings without turning every
+  development check into a long benchmark.
+
+Consequences:
+- `paper_non_llm` defaults to 100 paired repetitions.
+- `paper_llm` defaults to 30 paired repetitions and uses the fake LLM unless a
+  future task explicitly adds live API evaluation.
+
+## D-049 - Statistical Tests Are Hypothesis-Support Tools, Not Conclusions
+
+Decision:
+- BO-09 implements paired effect estimates, bootstrap confidence intervals,
+  McNemar paired-success comparisons, Wilcoxon secondary tests, Holm correction,
+  cumulative success curves, and failure summaries.
+
+Rationale:
+- The tutorial should support research-style analysis while keeping conclusions
+  separate from code-generation smoke checks.
+
+Consequences:
+- `docs/research_protocol.md` frames RQ1-RQ5 as testable hypotheses.
+- Generated reports explicitly avoid claims about real ASD chemistry.
