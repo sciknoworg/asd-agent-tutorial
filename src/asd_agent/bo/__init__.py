@@ -2,6 +2,13 @@
 
 from asd_agent.bo.backend import VirtualASDBackend
 from asd_agent.bo.interfaces import ExperimentBackend, Optimizer
+from asd_agent.bo.manual_lab import (
+    ManualCandidate,
+    ManualLabBackend,
+    ManualLabError,
+    ManualLabPlanRow,
+    ManualMeasurementRecord,
+)
 from asd_agent.bo.oracle import (
     Stage1EvaluationOracle,
     Stage1OracleReport,
@@ -54,6 +61,11 @@ __all__ = [
     "BORunRecord",
     "CandidateProposal",
     "ExperimentBackend",
+    "ManualCandidate",
+    "ManualLabBackend",
+    "ManualLabError",
+    "ManualLabPlanRow",
+    "ManualMeasurementRecord",
     "Optimizer",
     "OptimizerObservation",
     "OptimizerState",

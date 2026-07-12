@@ -7,4 +7,8 @@ This repository is an educational tutorial, not a predictive chemistry package.
 - Keep LLM reasoning records concise. Store only short rationales, never hidden chain-of-thought.
 - Prefer tests that exercise scientific behavior and safety guards over brittle snapshots.
 - Run `ruff format`, `ruff check`, `mypy`, and `pytest` before considering changes complete.
-
+- Keep manual laboratory handoff code human-operated. Do not add autonomous reactor
+  control, instrument drivers, or real-lab safety claims without an explicit new task
+  and qualified human review.
+- Keep BO oracle outputs evaluation-only. Optimizers, LLM prompts, and manual lab
+  plans must not receive hidden simulator parameters or oracle-only answers.

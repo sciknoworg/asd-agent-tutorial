@@ -597,30 +597,46 @@ Explicit non-goals:
 Purpose:
 - Prepare the final tutorial materials, notebooks, and handoff documentation for users
   who want to understand or extend the BO workflows.
+- Add a human-operated manual laboratory handoff backend that exports validated plans
+  and ingests completed measurements without autonomous reactor control.
 
 Dependencies:
 - BO-01 through BO-09.
 
 Expected files:
-- New BO notebooks under `notebooks/`
-- README updates
-- `docs/bo_user_guide.md`
-- `docs/lab_handoff.md`
-- Final prompt documentation under `prompts/`
+- `src/asd_agent/bo/manual_lab.py`
+- `scripts/run_manual_lab_smoke.py`
+- `tests/test_manual_lab.py`
+- `docs/lab_validation_protocol.md`
+- `docs/tutorial_outline.md`
+- `docs/model_cards/generic_gp.md`
+- `docs/model_cards/physics_informed_gp.md`
+- `docs/model_cards/constrained_mobo.md`
+- `docs/model_cards/hybrid_agent.md`
+- `docs/implementation/BO-10.md`
+- README and `AGENTS.md` updates.
 
 Acceptance criteria:
-- Notebooks explain simulator, BO, constrained BO, hybrid LLM-BO, benchmarks, and
-  failure modes without requiring live API calls unless clearly marked.
-- README gives install paths for base, dev, BO, and LLM extras.
-- Handoff docs state limitations and non-predictive chemistry scope.
+- `ManualLabBackend` validates Stage 2 candidates, exports CSV/JSON plans, marks
+  experiments pending, imports completed measurements, validates nanometer units and
+  required fields, updates the Stage 2 observation ledger, and returns observations
+  that can seed continued BO.
+- README gives install paths for base, dev, BO, analysis, notebooks, and LLM extras.
+- Handoff docs state human-operator responsibilities, limitations, and
+  non-predictive chemistry scope.
+- Model cards summarize generic GP, physics-informed GP, constrained MOBO, and hybrid
+  agent assumptions and limitations.
 - Full verification suite passes.
 
 Tests:
-- Notebook import/parse validation.
-- Documentation smoke checks where practical.
+- Manual-lab plan export, hard-bound rejection, measurement validation, QC rejection,
+  ledger update, and BO continuation.
 - Full `ruff format --check`, `ruff check`, `mypy`, and `pytest`.
+- Legacy demo, reduced benchmark, Stage 1 smoke, Stage 2 smoke, hybrid fake-LLM
+  smoke, research-analysis smoke, and manual export/ingestion smoke.
 
 Explicit non-goals:
 - No real-lab deployment automation.
 - No undisclosed credentials or prompt logs.
 - No expanded chemistry claims.
+- No live LLM calls or paper-scale runs in final verification.

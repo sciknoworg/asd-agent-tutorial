@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from asd_agent.bo.research import load_research_profile, run_research_study, save_research_rows
-from asd_agent.bo.statistics import save_research_analysis
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,6 +25,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    from asd_agent.bo.research import (
+        load_research_profile,
+        run_research_study,
+        save_research_rows,
+    )
+    from asd_agent.bo.statistics import save_research_analysis
+
     args = parse_args()
     profile = load_research_profile(args.profile)
     rows = run_research_study(profile)

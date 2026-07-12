@@ -268,7 +268,9 @@ def numeric(value: object) -> float | None:
         return None
     try:
         number = float(value)
-    except TypeError, ValueError:
+    except TypeError:
+        return None
+    except ValueError:
         return None
     if number != number:
         return None

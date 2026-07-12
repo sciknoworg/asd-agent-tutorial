@@ -727,3 +727,48 @@ Rationale:
 Consequences:
 - `docs/research_protocol.md` frames RQ1-RQ5 as testable hypotheses.
 - Generated reports explicitly avoid claims about real ASD chemistry.
+
+## D-050 - Manual Lab Handoff Is Human Operated
+
+Decision:
+- BO-10 adds `ManualLabBackend` for exporting validated Stage 2 candidates and
+  importing completed measurements, but it does not implement instrument control.
+
+Rationale:
+- The repository can support laboratory planning and record exchange while keeping
+  real equipment operation, safety review, and measurement collection under human
+  responsibility.
+
+Consequences:
+- Exported plans include safety notes that explicitly state no autonomous reactor
+  control is implemented.
+- Failed quality-control measurements are rejected from the optimizer ledger.
+- Accepted measurements become normal Stage 2 observations that can seed continued BO.
+
+## D-051 - Manual Measurement Units Are Nanometers
+
+Decision:
+- Manual measurement ingestion accepts GA and NGA thicknesses only in nanometer units.
+
+Rationale:
+- The simulator, objectives, constraints, and Stage 2 observation schema all use
+  nanometers. Silent unit conversion would be too risky for handoff records.
+
+Consequences:
+- Measurement rows using other units fail validation.
+- Real laboratory users must map local instrument outputs to nanometers before import.
+
+## D-052 - BO-10 Documentation Uses Model Cards And Protocols
+
+Decision:
+- Final BO documentation is split into a lab validation protocol, tutorial outline,
+  and model cards for generic GP, physics-informed GP, constrained MOBO, and the
+  hybrid agent.
+
+Rationale:
+- Different users need different levels of detail: operators need handoff rules,
+  tutorial readers need a map, and researchers need model assumptions and limitations.
+
+Consequences:
+- README remains a concise entry point.
+- Detailed limitations and non-goals are recorded in dedicated docs.

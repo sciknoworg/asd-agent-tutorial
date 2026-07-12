@@ -4,16 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from asd_agent.bo.stage2_analysis import generate_stage2_analysis_outputs
-from asd_agent.bo.stage2_benchmark import (
-    load_stage2_benchmark_profile,
-    profile_configs,
-    run_stage2_benchmark,
-    save_stage2_benchmark_results,
-    stage2_summary_rows,
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,6 +19,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    from asd_agent.bo.stage2_analysis import generate_stage2_analysis_outputs
+    from asd_agent.bo.stage2_benchmark import (
+        load_stage2_benchmark_profile,
+        profile_configs,
+        run_stage2_benchmark,
+        save_stage2_benchmark_results,
+        stage2_summary_rows,
+    )
+
     args = parse_args()
     profile = load_stage2_benchmark_profile(args.profile)
     results = run_stage2_benchmark(profile)
